@@ -7,6 +7,7 @@ const yearNode=document.querySelector('#current-year');
 const form=document.querySelector('#contact-form');
 const formStatus=document.querySelector('#form-status');
 const phoneInput=document.querySelector('#telefone');
+const whatsappNumber='5541999999999';
 
 const migrateOwnerRefs=()=>{
   const oldHost='fedidinho.github.io';
@@ -22,6 +23,15 @@ const migrateOwnerRefs=()=>{
 migrateOwnerRefs();
 
 if(yearNode) yearNode.textContent=new Date().getFullYear();
+
+const submitButton=form?.querySelector('button[type="submit"]');
+if(submitButton) submitButton.textContent='Enviar solicitação pelo WhatsApp';
+if(form && !form.querySelector('.whatsapp-form-note')){
+  const note=document.createElement('small');
+  note.className='whatsapp-form-note';
+  note.textContent='Ao enviar, você será direcionado ao WhatsApp da oficina com as informações preenchidas para concluir o atendimento.';
+  form.appendChild(note);
+}
 
 const updateScrollUI=()=>{
   const y=window.scrollY;
@@ -127,13 +137,25 @@ form?.addEventListener('submit',event=>{
     if(formStatus) formStatus.textContent='Revise os campos obrigatórios antes de continuar.';
     return;
   }
-  const submit=form.querySelector('button[type="submit"]');
-  if(submit){
-    const original=submit.innerHTML;
-    submit.disabled=true;
-    submit.textContent='Solicitação preparada ✓';
-    setTimeout(()=>{submit.disabled=false;submit.innerHTML=original;},2200);
-  }
-  if(formStatus) formStatus.textContent='Demonstração concluída. Em um site real, a solicitação seria enviada ao WhatsApp, e-mail ou CRM.';
-  form.reset();
+
+  const data=new FormData(form);
+  const nome=(data.get('nome')||'').toString().trim();
+  const telefone=(data.get('telefone')||'').toString().trim();
+  const veiculo=(data.get('veiculo')||'').toString().trim()||'Não informado';
+  const servico=(data.get('servico')||'').toString().trim();
+  const relato=(data.get('mensagem')||'').toString().trim();
+
+  const message=[
+    'Olá! Gostaria de solicitar um orçamento para meu veículo.',
+    '',
+    `*Nome:* ${nome}`,
+    `*Telefone:* ${telefone}`,
+    `*Veículo:* ${veiculo}`,
+    `*Serviço:* ${servico}`,
+    `*Relato:* ${relato}`
+  ].join('\n');
+
+  const url=`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+  if(formStatus) formStatus.textContent='Abrindo o WhatsApp com sua solicitação preenchida...';
+  window.open(url,'_blank','noopener,noreferrer');
 });
