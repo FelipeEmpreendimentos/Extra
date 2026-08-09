@@ -7,7 +7,8 @@ const yearNode=document.querySelector('#current-year');
 const form=document.querySelector('#contact-form');
 const formStatus=document.querySelector('#form-status');
 const phoneInput=document.querySelector('#telefone');
-const whatsappNumber='5541999999999';
+const whatsappNumber='5546991331846';
+const whatsappDisplay='(46) 99133-1846';
 
 const migrateOwnerRefs=()=>{
   const oldHost='fedidinho.github.io';
@@ -21,6 +22,19 @@ const migrateOwnerRefs=()=>{
   let node;while((node=walker.nextNode())){if(node.nodeValue?.includes('Fedidinho')) node.nodeValue=node.nodeValue.replaceAll('Fedidinho','FelipeEmpreendimentos');}
 };
 migrateOwnerRefs();
+
+const applyTestWhatsapp=()=>{
+  document.querySelectorAll('a[href*="5541999999999"]').forEach(link=>{
+    const href=link.getAttribute('href');
+    if(href) link.setAttribute('href',href.replaceAll('5541999999999',whatsappNumber));
+  });
+  document.querySelectorAll('a[href="tel:+5541999999999"]').forEach(link=>link.setAttribute('href','tel:+5546991331846'));
+  document.querySelectorAll('a').forEach(link=>{if(link.textContent.trim()==='(41) 99999-9999') link.textContent=whatsappDisplay;});
+  document.querySelectorAll('script[type="application/ld+json"]').forEach(el=>{
+    if(el.textContent.includes('+55-41-99999-9999')) el.textContent=el.textContent.replaceAll('+55-41-99999-9999','+55-46-99133-1846');
+  });
+};
+applyTestWhatsapp();
 
 if(yearNode) yearNode.textContent=new Date().getFullYear();
 
