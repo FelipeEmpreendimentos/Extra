@@ -51,6 +51,12 @@ jobs:
           test -f contabilidade/assets/logo.svg
           test -f contabilidade/assets/favicon.svg
           test -f contabilidade/manifest.webmanifest
+          test -f lava-car/index.html
+          test -f lava-car/style.css
+          test -f lava-car/script.js
+          test -f lava-car/assets/logo.svg
+          test -f lava-car/assets/favicon.svg
+          test -f lava-car/manifest.webmanifest
           test -f portfolio/index.html
           test -f portfolio/style.css
           test -f portfolio/script.js
@@ -65,11 +71,12 @@ jobs:
           node --check imobiliaria/script.js
           node --check oficina/script.js
           node --check contabilidade/script.js
+          node --check lava-car/script.js
           node --check portfolio/script.js
 
       - name: Check essential HTML metadata
         run: |
-          for page in index.html odontologia/index.html imobiliaria/index.html oficina/index.html contabilidade/index.html portfolio/index.html; do
+          for page in index.html odontologia/index.html imobiliaria/index.html oficina/index.html contabilidade/index.html lava-car/index.html portfolio/index.html; do
             grep -q '<meta name="description"' "$page"
             grep -q '<meta property="og:title"' "$page"
             grep -q 'application/ld+json' "$page"
