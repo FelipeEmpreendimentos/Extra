@@ -1,0 +1,9 @@
+{
+  "name": "NÍTIDO Auto Care",
+  "short_name": "NÍTIDO",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#080a0c",
+  "theme_color": "#080a0c",
+  "icons": []
+}
