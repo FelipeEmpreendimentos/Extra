@@ -6,19 +6,6 @@ const backTop=document.querySelector('.back-top');
 const yearNode=document.querySelector('#current-year');
 const copyStatus=document.querySelector('#copy-status');
 
-const migrateOwnerRefs=()=>{
-  const oldHost='fedidinho.github.io';
-  const newHost='felipeempreendimentos.github.io';
-  const author=document.querySelector('meta[name="author"]');
-  if(author) author.content='FelipeEmpreendimentos';
-  document.querySelectorAll('[href]').forEach(el=>{const value=el.getAttribute('href');if(value?.includes(oldHost)) el.setAttribute('href',value.replaceAll(oldHost,newHost));});
-  document.querySelectorAll('meta[content]').forEach(el=>{const value=el.getAttribute('content');if(value?.includes(oldHost)) el.setAttribute('content',value.replaceAll(oldHost,newHost));});
-  document.querySelectorAll('script[type="application/ld+json"]').forEach(el=>{if(el.textContent.includes(oldHost)) el.textContent=el.textContent.replaceAll(oldHost,newHost);});
-  const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-  let node;while((node=walker.nextNode())){if(node.nodeValue?.includes('Fedidinho')) node.nodeValue=node.nodeValue.replaceAll('Fedidinho','FelipeEmpreendimentos');}
-};
-migrateOwnerRefs();
-
 if(yearNode) yearNode.textContent=new Date().getFullYear();
 
 const previewMockups=[
@@ -26,7 +13,8 @@ const previewMockups=[
   {brand:'LUME ODONTOLOGIA',kicker:'ODONTOLOGIA CONTEMPORÂNEA',title:'Seu sorriso merece cuidado com leveza e precisão.',action:'Agendar avaliação ↗',image:'https://images.unsplash.com/photo-1606811971618-4486d14f3f99?auto=format&fit=crop&w=1400&q=86',accent:'#0e6f68',overlay:'linear-gradient(90deg,rgba(244,251,249,.99) 0%,rgba(244,251,249,.94) 49%,rgba(244,251,249,.16) 100%)',className:'preview-light'},
   {brand:'VÉRTICE IMÓVEIS',kicker:'CURADORIA IMOBILIÁRIA',title:'Lugares que combinam com o próximo capítulo.',action:'Explorar imóveis ↗',image:'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=86',accent:'#d38a62',overlay:'linear-gradient(90deg,rgba(20,21,20,.96) 0%,rgba(20,21,20,.78) 46%,rgba(20,21,20,.18) 100%)',className:'preview-dark'},
   {brand:'PONTA DE TORQUE',kicker:'GARAGE · SERVIÇOS AUTOMOTIVOS',title:'Seu carro em dia, sem surpresa e sem enrolação.',action:'Pedir orçamento ↗',image:'https://images.unsplash.com/photo-1487754180451-c456f719a1fc?auto=format&fit=crop&w=1400&q=86',accent:'#ef7d32',overlay:'linear-gradient(90deg,rgba(8,10,12,.98) 0%,rgba(8,10,12,.84) 49%,rgba(8,10,12,.22) 100%)',className:'preview-dark'},
-  {brand:'NEXO CONTÁBIL',kicker:'CONTABILIDADE CONSULTIVA',title:'Menos burocracia. Mais visão para o negócio.',action:'Falar com um especialista ↗',image:'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1400&q=86',accent:'#38c6a3',overlay:'linear-gradient(90deg,rgba(8,28,38,.98) 0%,rgba(8,28,38,.89) 48%,rgba(8,28,38,.24) 100%)',className:'preview-dark'}
+  {brand:'NEXO CONTÁBIL',kicker:'CONTABILIDADE CONSULTIVA',title:'Menos burocracia. Mais visão para o negócio.',action:'Falar com um especialista ↗',image:'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1400&q=86',accent:'#38c6a3',overlay:'linear-gradient(90deg,rgba(8,28,38,.98) 0%,rgba(8,28,38,.89) 48%,rgba(8,28,38,.24) 100%)',className:'preview-dark'},
+  {brand:'NÍTIDO AUTO CARE',kicker:'ESTÉTICA AUTOMOTIVA',title:'Seu carro merece mais do que uma lavagem.',action:'Agendar cuidado ↗',image:'https://images.unsplash.com/photo-1607860108855-64acf2078ed9?auto=format&fit=crop&w=1400&q=86',accent:'#b8ff3d',overlay:'linear-gradient(90deg,rgba(5,8,9,.98) 0%,rgba(5,8,9,.82) 49%,rgba(5,8,9,.20) 100%)',className:'preview-dark'}
 ];
 
 const previewStyles=document.createElement('style');
@@ -34,7 +22,6 @@ previewStyles.textContent=`
   .project-preview{display:flex;flex-direction:column}
   .iframe-stage.static-preview{position:relative;flex:1;height:auto!important;min-height:326px;overflow:hidden;background-size:cover;background-position:center;isolation:isolate}
   .project-wide .iframe-stage.static-preview{min-height:466px}
-  .iframe-stage.static-preview:before{content:"";position:absolute;inset:0;background:inherit;background-image:none;z-index:-2}
   .preview-mock{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:42px 44px;z-index:1}
   .project-wide .preview-mock{padding:58px 64px}
   .preview-mock.preview-dark{color:#fff}
