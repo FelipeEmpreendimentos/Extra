@@ -1,0 +1,15 @@
+{
+  "name": "salesboard-mvp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard de vendas com assinatura mensal personalizável.",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "stripe": "^18.5.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.2.1"
+  }
+}
