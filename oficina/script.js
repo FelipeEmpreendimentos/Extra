@@ -38,6 +38,9 @@ applyTestWhatsapp();
 
 if(yearNode) yearNode.textContent=new Date().getFullYear();
 
+const serviceLabel=document.querySelector('label[for="servico"]');
+if(serviceLabel) serviceLabel.textContent='Serviços';
+
 const submitButton=form?.querySelector('button[type="submit"]');
 if(submitButton) submitButton.textContent='Enviar solicitação pelo WhatsApp';
 if(form && !form.querySelector('.whatsapp-form-note')){
