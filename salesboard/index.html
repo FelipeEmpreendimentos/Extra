@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SalesBoard - dashboard de vendas com assinatura mensal e valores personalizáveis." />
+  <title>SalesBoard • Dashboard de vendas</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span>S</span><div><strong id="brandName">SalesBoard</strong><small>Gestão comercial</small></div></div>
+      <nav class="nav">
+        <button class="nav-item active" data-view="dashboard">Dashboard</button>
+        <button class="nav-item" data-view="sales">Vendas</button>
+        <button class="nav-item" data-view="customers">Clientes</button>
+        <button class="nav-item" data-view="billing">Assinatura</button>
+        <button class="nav-item" data-view="settings">Configurações</button>
+      </nav>
+    </aside>
+    <main>
+      <header class="topbar"><div><p class="eyebrow">Resumo comercial</p><h1 id="pageTitle">Dashboard</h1></div><button class="primary" data-view-trigger="sales">Nova venda</button></header>
+
+      <section class="view active" id="dashboard">
+        <div class="grid cards"><article><span>Faturamento pago</span><strong id="paidRevenue">R$ 0,00</strong></article><article><span>Vendas</span><strong id="salesCount">0</strong></article><article><span>Ticket médio</span><strong id="avgTicket">R$ 0,00</strong></article><article><span>Meta mensal</span><strong id="goalProgress">0%</strong></article></div>
+        <div class="panel"><div class="panel-head"><h2>Últimos 6 meses</h2><p id="goalLabel">Meta: R$ 0,00</p></div><canvas id="chart" height="120"></canvas></div>
+        <div class="panel"><div class="panel-head"><h2>Vendas recentes</h2><button class="ghost" id="exportCsv">Exportar CSV</button></div><div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Produto</th><th>Valor</th><th>Data</th><th>Status</th><th></th></tr></thead><tbody id="recentSales"></tbody></table></div></div>
+      </section>
+
+      <section class="view" id="sales">
+        <div class="grid two">
+          <form class="panel form" id="saleForm"><h2>Cadastrar venda</h2><label>Cliente<input name="customer" required placeholder="Nome do cliente"></label><label>Produto/serviço<input name="product" required placeholder="Ex: Plano mensal"></label><label>Valor<input name="amount" type="number" min="1" step="0.01" required></label><label>Data<input name="date" type="date" required></label><label>Status<select name="status"><option>Pago</option><option>Pendente</option><option>Cancelado</option></select></label><button class="primary" type="submit">Salvar venda</button></form>
+          <div class="panel"><div class="panel-head"><h2>Todas as vendas</h2><input id="search" placeholder="Buscar cliente ou produto"></div><div id="allSales" class="list"></div></div>
+        </div>
+      </section>
+
+      <section class="view" id="customers"><div class="panel"><h2>Clientes</h2><div id="customersList" class="customer-grid"></div></div></section>
+
+      <section class="view" id="billing"><div class="hero-card"><p class="eyebrow">Cobrança mensal</p><h2 id="planName">SalesBoard Pro</h2><p id="planDescription">Dashboard completo para acompanhar suas vendas e clientes.</p><strong id="planPrice">R$ 49,90/mês</strong><button class="primary" id="checkoutBtn">Assinar agora</button><small id="checkoutMessage">A função de checkout usa Stripe no Netlify Functions.</small></div></section>
+
+      <section class="view" id="settings"><form class="panel form" id="settingsForm"><h2>Valores personalizáveis</h2><label>Nome do sistema<input name="appName"></label><label>Nome do plano<input name="planName"></label><label>Mensalidade<input name="monthlyPrice" type="number" step="0.01"></label><label>Moeda<select name="currency"><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option></select></label><label>Meta mensal<input name="monthlyGoal" type="number" step="0.01"></label><label>Ticket sugerido<input name="defaultTicket" type="number" step="0.01"></label><label>Descrição<textarea name="planDescription" rows="3"></textarea></label><button class="primary" type="submit">Salvar configurações</button></form></section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
