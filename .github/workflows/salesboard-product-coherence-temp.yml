@@ -45,12 +45,12 @@ jobs:
 
       - name: Commit product coherence changes
         run: |
-          if git diff --quiet; then
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app/index.html salesboard/app/app.js salesboard/app/quality.css salesboard/index.html salesboard/README.md
+          if git diff --cached --quiet; then
             echo "Nothing to commit"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add salesboard/app/index.html salesboard/app/app.js salesboard/app/quality.css salesboard/index.html salesboard/README.md .github/workflows/salesboard-production-check.yml
           git commit -m "Align SalesBoard product flows and monthly reports"
           git push origin main
