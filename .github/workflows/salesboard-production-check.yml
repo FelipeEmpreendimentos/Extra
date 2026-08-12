@@ -90,8 +90,10 @@ jobs:
       - name: Check launch transparency and legal flows
         run: |
           grep -Fq '7 dias grátis' salesboard/index.html
-          grep -Fq 'R$14,90' salesboard/index.html
-          grep -Fq 'R$24,90' salesboard/index.html
+          grep -Fq 'data-monthly="14,90"' salesboard/index.html
+          grep -Fq 'data-monthly="24,90"' salesboard/index.html
+          grep -Fq 'data-annual="12,42"' salesboard/index.html
+          grep -Fq 'data-annual="20,75"' salesboard/index.html
           grep -Fq 'legal/privacidade.html' salesboard/index.html
           grep -Fq 'legal/termos.html' salesboard/index.html
           grep -Fq 'data-netlify="true"' salesboard/contato.html
