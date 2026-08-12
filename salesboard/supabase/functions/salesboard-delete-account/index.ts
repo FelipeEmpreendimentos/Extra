@@ -28,12 +28,6 @@ function adminClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-async function fingerprintEmail(email: string) {
-  const bytes = new TextEncoder().encode(email.trim().toLowerCase())
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
 async function cancelStripeSubscription(subscriptionId: string) {
   const secret = Deno.env.get('STRIPE_SECRET_KEY')
   if (!secret) throw new Error('STRIPE_NOT_CONFIGURED')
@@ -63,14 +57,8 @@ Deno.serve(async (req) => {
     const user = data?.user
     if (error || !user) return new Response(JSON.stringify({ error: 'Sessão inválida.' }), { status: 401, headers })
 
-    if (user.email) {
-      const emailFingerprint = await fingerprintEmail(user.email)
-      const { error: claimError } = await admin
-        .from('trial_claims')
-        .upsert({ email_fingerprint: emailFingerprint }, { onConflict: 'email_fingerprint', ignoreDuplicates: true })
-      if (claimError) throw claimError
-    }
-
+    // Trial eligibility is claimed only by start_salesboard_trial().
+    // Deleting an account that never started a trial must not consume the one-time trial.
     const { data: subscription, error: subscriptionError } = await admin
       .from('subscriptions')
       .select('stripe_subscription_id,status')
@@ -85,7 +73,7 @@ Deno.serve(async (req) => {
     const { error: deleteError } = await admin.auth.admin.deleteUser(user.id)
     if (deleteError) throw deleteError
 
-    return new Response(JSON.stringify({ deleted: true, trialEligibleOnRecreate: false }), { status: 200, headers })
+    return new Response(JSON.stringify({ deleted: true }), { status: 200, headers })
   } catch (error) {
     console.error(error)
     const message = error instanceof Error && error.message === 'STRIPE_NOT_CONFIGURED'
