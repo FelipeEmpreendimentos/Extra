@@ -19,7 +19,7 @@ jobs:
           ref: main
 
       - name: Apply auth and billing patch
-        run: python salesboard/scripts/fix_auth_billing.py
+        run: python salesboard/scripts/run_auth_billing_fix.py
 
       - name: Validate patched JavaScript
         run: |
