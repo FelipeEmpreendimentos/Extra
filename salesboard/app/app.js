@@ -66,7 +66,7 @@
   }
 
   function showOnly(id) {
-    ['boot-screen', 'setup-error', 'auth-screen', 'forgot-screen', 'recovery-screen', 'onboarding-screen', 'paywall-screen', 'app-shell'].forEach((screenId) => {
+    ['boot-screen', 'setup-error', 'auth-screen', 'forgot-screen', 'recovery-screen', 'trial-plan-screen', 'onboarding-screen', 'paywall-screen', 'app-shell'].forEach((screenId) => {
       const element = document.getElementById(screenId);
       if (element) element.hidden = screenId !== id;
     });
@@ -150,7 +150,7 @@
     const profile = state.profile;
     if (!profile) return 'none';
     if (profile.subscription_status === 'active') return profile.plan === 'essential' ? 'essential' : 'pro';
-    if (profile.subscription_status === 'trialing' && new Date(profile.trial_ends_at).getTime() > Date.now()) return 'pro';
+    if (profile.subscription_status === 'trialing' && new Date(profile.trial_ends_at).getTime() > Date.now()) return profile.plan === 'essential' ? 'essential' : 'pro';
     return 'none';
   }
 
@@ -220,6 +220,9 @@
     if (message.includes('PLAN_LIMIT_ACCOUNTS')) return 'O plano Essencial permite até 3 contas. Faça upgrade para o Pro para adicionar mais.';
     if (message.includes('PLAN_REQUIRED_PRO')) return 'Este recurso faz parte do plano Pro.';
     if (message.includes('SUBSCRIPTION_REQUIRED')) return 'Seu período de acesso terminou. Escolha um plano para continuar.';
+    if (message.includes('TRIAL_ALREADY_USED')) return 'Este e-mail já utilizou o período de experiência. Escolha um plano para continuar.';
+    if (message.includes('TRIAL_ALREADY_STARTED')) return 'Seu período de experiência já foi iniciado em outro plano e não pode ser reiniciado.';
+    if (message.includes('INVALID_TRIAL_PLAN')) return 'Não foi possível identificar o plano escolhido. Atualize a página e tente novamente.';
     if (message.includes('duplicate key') || error?.code === '23505') return 'Já existe um item com essas informações.';
     if (message.includes('foreign key')) return 'Este item está sendo usado em lançamentos e não pode ser excluído agora.';
     return message.length > 180 ? 'Não foi possível concluir a operação. Tente novamente.' : message;
@@ -288,6 +291,87 @@
     setAuthMessage('');
   }
 
+  async function trialEligible() {
+    if (demoMode || !supabaseClient) return false;
+    const { data, error } = await supabaseClient.rpc('salesboard_trial_eligible');
+    if (error) throw error;
+    return data === true;
+  }
+
+  function renderTrialPlanScreen() {
+    $$('[data-trial-card]').forEach((card) => {
+      const preferred = card.dataset.trialCard === requestedPlan;
+      card.classList.toggle('preferred', preferred);
+    });
+  }
+
+  async function startTrial(plan, button) {
+    if (!['essential', 'pro'].includes(plan) || demoMode) return;
+    const buttons = $$('[data-start-trial]');
+    buttons.forEach((item) => { item.disabled = true; });
+    setButtonLoading(button, true, 'Preparando seu acesso...');
+    try {
+      const { error } = await supabaseClient.rpc('start_salesboard_trial', { p_plan: plan });
+      if (error) throw error;
+      const { data: profile, error: profileError } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).single();
+      if (profileError) throw profileError;
+      state.profile = profile;
+      if (state.profile.onboarded) {
+        await loadFinancialData();
+        enterApp();
+      } else {
+        setupOnboarding();
+        showOnly('onboarding-screen');
+      }
+      toast(`Plano ${plan === 'essential' ? 'Essencial' : 'Pro'} liberado`, 'Seus 3 dias começaram agora. Aproveite para configurar seu espaço e testar os recursos do plano.');
+    } catch (error) {
+      if (String(error?.message || '').includes('TRIAL_ALREADY_USED')) {
+        const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).single();
+        if (profile) state.profile = profile;
+        renderPaywallExperience();
+        showOnly('paywall-screen');
+      } else {
+        toast('Não foi possível iniciar sua experiência', friendlyError(error), 'error');
+      }
+    } finally {
+      buttons.forEach((item) => { item.disabled = false; });
+      setButtonLoading(button, false);
+    }
+  }
+
+  function renderPaywallExperience() {
+    const testedPlan = state.profile?.plan === 'essential' ? 'Essencial' : 'Pro';
+    const onboarded = Boolean(state.profile?.onboarded);
+    const title = $('#paywall-title');
+    const copy = $('#paywall-copy');
+    const tested = $('#paywall-tested-plan');
+    const kicker = $('#paywall-kicker');
+    const exportButton = $('#paywall-export');
+
+    if (tested) tested.textContent = testedPlan;
+    if (exportButton) exportButton.hidden = !onboarded;
+    if (onboarded) {
+      if (kicker) kicker.textContent = 'Seu espaço continua aqui';
+      if (title) title.textContent = 'Continue com a visão financeira que você construiu.';
+      if (copy) copy.textContent = `Seu período no ${testedPlan} foi concluído, mas seu espaço, histórico e configurações permanecem preservados. Escolha como quer continuar e retome exatamente de onde parou.`;
+    } else {
+      if (kicker) kicker.textContent = 'Pronto para começar';
+      if (title) title.textContent = 'Escolha o plano que acompanha sua rotina.';
+      if (copy) copy.textContent = 'Este e-mail já utilizou a experiência inicial do SalesBoard. Ative um plano para criar seu espaço financeiro e começar com todos os recursos da opção escolhida.';
+    }
+
+    $$('[data-paywall-card]').forEach((card) => {
+      const isTested = card.dataset.paywallCard === state.profile?.plan;
+      card.classList.toggle('featured', isTested);
+      const button = card.querySelector('[data-paywall-plan]');
+      if (button) {
+        button.classList.toggle('primary', isTested);
+        button.classList.toggle('outline', !isTested);
+        button.textContent = isTested ? `Continuar com ${testedPlan}` : `Escolher ${card.dataset.paywallCard === 'essential' ? 'Essencial' : 'Pro'}`;
+      }
+    });
+  }
+
   async function initializeAuthenticatedUser() {
     showOnly('boot-screen');
     state.user = session.user;
@@ -302,9 +386,25 @@
 
     if (params.get('checkout') === 'success') await waitForBillingSync();
 
+    const trialActive = state.profile.subscription_status === 'trialing' && new Date(state.profile.trial_ends_at).getTime() > Date.now();
+    const canUseProduct = state.profile.subscription_status === 'active' || trialActive;
+
     if (!state.profile.onboarded) {
-      setupOnboarding();
-      showOnly('onboarding-screen');
+      if (canUseProduct) {
+        setupOnboarding();
+        showOnly('onboarding-screen');
+        return;
+      }
+
+      const eligible = await trialEligible();
+      if (eligible) {
+        renderTrialPlanScreen();
+        showOnly('trial-plan-screen');
+        return;
+      }
+
+      renderPaywallExperience();
+      showOnly('paywall-screen');
       return;
     }
 
@@ -312,6 +412,7 @@
     const entitlement = profileEntitlement();
     if (entitlement === 'none') {
       renderIdentity();
+      renderPaywallExperience();
       showOnly('paywall-screen');
       return;
     }
@@ -418,13 +519,21 @@
   function renderTrialCard() {
     const card = $('#trial-card');
     if (!card) return;
+    const planName = state.profile?.plan === 'essential' ? 'Essencial' : 'Pro';
     if (isPaid()) {
-      card.innerHTML = `<span>PLANO ATIVO</span><strong>${state.profile.plan === 'essential' ? 'Essencial' : 'Pro'}</strong><p>Sua assinatura está ativa.</p><button data-view="billing">Gerenciar plano →</button>`;
+      card.hidden = false;
+      card.innerHTML = `<span>PLANO ATIVO</span><strong>${planName}</strong><p>Sua assinatura está ativa.</p><button data-view="billing">Gerenciar plano →</button>`;
       card.querySelector('button').addEventListener('click', () => switchView('billing'));
       return;
     }
-    const remaining = Math.max(0, Math.ceil((new Date(state.profile.trial_ends_at).getTime() - Date.now()) / 86400000));
-    $('#trial-days').textContent = `${remaining} ${remaining === 1 ? 'dia restante' : 'dias restantes'}`;
+    if (state.profile?.subscription_status === 'trialing' && new Date(state.profile.trial_ends_at).getTime() > Date.now()) {
+      card.hidden = false;
+      const remaining = Math.max(0, Math.ceil((new Date(state.profile.trial_ends_at).getTime() - Date.now()) / 86400000));
+      card.innerHTML = `<span>EXPERIÊNCIA ${planName.toUpperCase()}</span><strong>${remaining} ${remaining === 1 ? 'dia restante' : 'dias restantes'}</strong><p>Você está usando os recursos do plano ${planName}.</p><button data-view="billing">Ver plano →</button>`;
+      card.querySelector('button').addEventListener('click', () => switchView('billing'));
+      return;
+    }
+    card.hidden = true;
   }
 
   function renderAll() {
@@ -719,17 +828,18 @@
   }
 
   function renderBilling() {
-    const entitlement = profileEntitlement();
     const activePlan = state.profile?.plan === 'essential' ? 'Essencial' : 'Pro';
     let statusText = 'Sem assinatura';
     if (state.profile?.subscription_status === 'trialing') {
       const remaining = Math.max(0, Math.ceil((new Date(state.profile.trial_ends_at).getTime() - Date.now()) / 86400000));
-      statusText = `Teste grátis · ${remaining} ${remaining === 1 ? 'dia restante' : 'dias restantes'}`;
+      statusText = `Experiência ${activePlan} · ${remaining} ${remaining === 1 ? 'dia restante' : 'dias restantes'}`;
     } else if (state.profile?.subscription_status === 'active') statusText = 'Assinatura ativa';
     else if (state.profile?.subscription_status === 'past_due') statusText = 'Pagamento pendente';
     else if (state.profile?.subscription_status === 'canceled') statusText = 'Assinatura encerrada';
 
-    $('#current-plan').innerHTML = `<div><span>${escapeHTML(statusText.toUpperCase())}</span><h2>${state.profile?.subscription_status === 'active' ? activePlan : entitlement === 'pro' ? 'Teste Pro' : 'Sem plano ativo'}</h2><p>${state.subscription?.cancel_at_period_end ? 'Cancelamento agendado para o fim do período.' : 'Você pode gerenciar cobrança e cancelamento no portal seguro.'}</p></div><div><small>Plano atual</small><strong>${state.profile?.subscription_status === 'active' ? activePlan : 'Trial'}</strong></div>`;
+    const headline = state.profile?.subscription_status === 'active' ? activePlan : state.profile?.subscription_status === 'trialing' ? `Experiência ${activePlan}` : 'Sem plano ativo';
+    const currentLabel = state.profile?.subscription_status === 'active' ? activePlan : state.profile?.subscription_status === 'trialing' ? activePlan : '—';
+    $('#current-plan').innerHTML = `<div><span>${escapeHTML(statusText.toUpperCase())}</span><h2>${escapeHTML(headline)}</h2><p>${state.subscription?.cancel_at_period_end ? 'Cancelamento agendado para o fim do período.' : state.profile?.subscription_status === 'trialing' ? `Seu acesso atual segue exatamente as permissões do ${activePlan}.` : 'Você pode gerenciar cobrança e cancelamento no portal seguro.'}</p></div><div><small>Plano atual</small><strong>${escapeHTML(currentLabel)}</strong></div>`;
     $$('[data-billing-cycle]').forEach((button) => button.classList.toggle('active', button.dataset.billingCycle === billingCycle));
     $$('[data-price-monthly][data-price-annual]').forEach((price) => {
       const text = price.dataset[`price${billingCycle[0].toUpperCase()}${billingCycle.slice(1)}`];
@@ -1406,6 +1516,8 @@
     $('#logout-button').addEventListener('click', logout);
     $('#paywall-logout').addEventListener('click', logout);
     $('#delete-account').addEventListener('click', deleteAccountPermanently);
+    $$('[data-start-trial]').forEach((button) => button.addEventListener('click', () => startTrial(button.dataset.startTrial, button)));
+    $('#trial-plan-logout')?.addEventListener('click', logout);
     $$('[data-subscribe]').forEach((button) => button.addEventListener('click', () => subscribe(button.dataset.subscribe)));
     $$('[data-paywall-plan]').forEach((button) => button.addEventListener('click', () => subscribe(button.dataset.paywallPlan)));
     $$('[data-billing-cycle]').forEach((button) => button.addEventListener('click', () => { billingCycle = button.dataset.billingCycle; renderBilling(); }));

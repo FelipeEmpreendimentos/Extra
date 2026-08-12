@@ -62,6 +62,29 @@
     <div class="setup-card auth-flow-card"><span class="brand-mark"><i></i><i></i><i></i></span><span class="kicker">Link verificado</span><h1>Defina uma nova senha</h1><p>Escolha uma senha com pelo menos 8 caracteres e confirme antes de salvar.</p><form id="recovery-form" class="stack-form"><label>Nova senha<div class="password-field"><input id="recovery-password" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password" aria-label="Mostrar senha">◉</button></div></label><label>Confirmar nova senha<div class="password-field"><input id="recovery-password-confirm" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password-confirm" aria-label="Mostrar senha">◉</button></div></label><div class="password-rules"><span id="rule-length">○ 8 ou mais caracteres</span><span id="rule-match">○ As duas senhas são iguais</span></div><button class="button primary wide" type="submit">Salvar nova senha</button></form><div id="recovery-message" class="auth-message" hidden></div></div>
   </section>
 
+  <section id="trial-plan-screen" class="trial-choice-screen" hidden>
+    <div class="trial-choice-shell">
+      <header class="trial-choice-brand"><a class="brand" href="../"><span class="brand-mark"><i></i><i></i><i></i></span><span>SalesBoard <b>Finance</b></span></a><button type="button" class="link-button" id="trial-plan-logout">Sair</button></header>
+      <div class="trial-choice-intro"><span class="kicker">3 dias para conhecer de verdade</span><h1>Escolha a experiência que combina com você.</h1><p>Seu período começa somente quando você escolher um plano. São 72 horas completas, sem cartão, com os recursos reais daquele plano.</p><div class="trial-choice-note"><span>✓ Sem cartão agora</span><span>✓ Uma única experiência por conta/e-mail</span><span>✓ Seus dados ficam preservados depois</span></div></div>
+      <div class="trial-plan-grid">
+        <article class="trial-plan-card" data-trial-card="essential">
+          <div class="trial-plan-top"><span class="trial-plan-name">Essencial</span><strong>R$ 14,90<small>/mês depois</small></strong></div>
+          <p>Para organizar o dia a dia com simplicidade e visão do que entra, sai e está planejado.</p>
+          <ul><li>Até 3 contas ativas</li><li>Lançamentos ilimitados</li><li>Categorias e orçamentos personalizados</li><li>Dashboard e relatórios essenciais</li><li>Busca, filtros e exportação CSV</li></ul>
+          <button type="button" class="button outline wide" data-start-trial="essential">Testar Essencial por 3 dias</button>
+        </article>
+        <article class="trial-plan-card featured" data-trial-card="pro">
+          <span class="trial-recommended">MAIS COMPLETO</span>
+          <div class="trial-plan-top"><span class="trial-plan-name">Pro</span><strong>R$ 24,90<small>/mês depois</small></strong></div>
+          <p>Para quem quer uma visão mais profunda, automação e liberdade total para estruturar as finanças.</p>
+          <ul><li>Contas ilimitadas</li><li>Tudo do Essencial</li><li>Metas financeiras</li><li>Lançamentos recorrentes</li><li>Relatórios avançados de 12 meses</li><li>Diagnósticos e análises detalhadas</li></ul>
+          <button type="button" class="button primary wide" data-start-trial="pro">Testar Pro por 3 dias</button>
+        </article>
+      </div>
+      <p class="trial-choice-footnote">A escolha define os recursos disponíveis durante os 3 dias. O período não reinicia ao trocar de plano depois.</p>
+    </div>
+  </section>
+
   <section id="onboarding-screen" class="onboarding-screen" hidden>
     <div class="onboarding-card"><header><a class="brand" href="../"><span class="brand-mark"><i></i><i></i><i></i></span><span>SalesBoard <b>Finance</b></span></a><span id="onboarding-step-label">Etapa 1 de 3</span></header><div class="onboarding-progress"><i id="onboarding-progress"></i></div>
       <form id="onboarding-form">
@@ -74,7 +97,19 @@
   </section>
 
   <section id="paywall-screen" class="center-screen" hidden>
-    <div class="paywall-card"><span class="paywall-icon">◇</span><span class="kicker">Seu teste terminou</span><h1>Continue com seus dados e histórico.</h1><p id="paywall-copy">Escolha um plano para continuar registrando e analisando suas finanças.</p><div class="paywall-plans"><article><span>Essencial</span><strong>R$14,90<small>/mês</small></strong><p>Até 3 contas, lançamentos ilimitados, orçamentos e relatórios essenciais.</p><button class="button outline wide" data-paywall-plan="essential">Escolher Essencial</button></article><article class="featured"><span>Pro</span><strong>R$24,90<small>/mês</small></strong><p>Contas ilimitadas, metas, recorrências e relatórios avançados de 12 meses.</p><button class="button primary wide" data-paywall-plan="pro">Escolher Pro</button></article></div><div class="paywall-actions"><button class="link-button" id="paywall-export">Exportar meus dados</button><button class="link-button" id="paywall-logout">Sair</button></div></div>
+    <div class="paywall-card continuation-card">
+      <div class="continuation-icon">◇</div>
+      <span class="kicker" id="paywall-kicker">Seu espaço continua aqui</span>
+      <h1 id="paywall-title">Continue de onde você parou.</h1>
+      <p id="paywall-copy">Seus dados permanecem preservados. Ative um plano para retomar sua organização financeira com tudo no lugar.</p>
+      <div class="continuation-context"><div><small>Experiência escolhida</small><strong id="paywall-tested-plan">Pro</strong></div><div><small>Seus dados</small><strong>Preservados</strong></div></div>
+      <div class="paywall-plans">
+        <article data-paywall-card="essential"><span>Essencial</span><strong>R$14,90<small>/mês</small></strong><p>Até 3 contas, lançamentos ilimitados, orçamentos e relatórios essenciais.</p><button class="button outline wide" data-paywall-plan="essential">Continuar com Essencial</button></article>
+        <article data-paywall-card="pro"><span>Pro</span><strong>R$24,90<small>/mês</small></strong><p>Contas ilimitadas, metas, recorrências e relatórios avançados de 12 meses.</p><button class="button outline wide" data-paywall-plan="pro">Continuar com Pro</button></article>
+      </div>
+      <p class="continuation-note">A assinatura é processada com segurança pelo Stripe. Você pode gerenciar cobrança e cancelamento pelo portal do cliente.</p>
+      <div class="paywall-actions"><button class="link-button" id="paywall-export">Exportar meus dados</button><button class="link-button" id="paywall-logout">Sair</button></div>
+    </div>
   </section>
 
   <section id="app-shell" class="app-shell" hidden>

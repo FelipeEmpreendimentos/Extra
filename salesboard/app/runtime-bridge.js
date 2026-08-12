@@ -229,7 +229,7 @@
             <li>Se houver uma assinatura ativa, ela será cancelada antes da exclusão.</li>
             <li>Você perderá o acesso ao histórico e às configurações deste espaço.</li>
           </ul>
-          <div class="sb-delete-trial"><strong>Importante:</strong> o teste grátis de 3 dias é concedido uma única vez por e-mail. Se você criar outra conta com este mesmo e-mail no futuro, o trial não será aplicado novamente.</div>
+          <div class="sb-delete-trial"><strong>Importante:</strong> se este e-mail já iniciou um período de experiência, ele não poderá receber outro no futuro. Excluir uma conta antes de escolher um plano não consome o direito ao teste.</div>
           <label class="sb-delete-label">Para confirmar, digite <b>EXCLUIR</b>
             <input class="sb-delete-input" id="sb-delete-confirmation" autocomplete="off" spellcheck="false" placeholder="EXCLUIR" />
           </label>
