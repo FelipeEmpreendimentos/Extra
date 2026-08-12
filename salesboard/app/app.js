@@ -178,7 +178,7 @@
 
   function goalProgress(goal) {
     const base = Math.max(0, Number(goal?.current_amount || 0));
-    const linked = paidTransactions().filter((row) => row.goal_id === goal?.id).reduce((sum, row) => sum + Number(row.amount), 0);
+    const linked = paidTransactions().filter((row) => row.type === 'income' && row.goal_id === goal?.id).reduce((sum, row) => sum + Number(row.amount), 0);
     return Math.min(Number(goal?.target_amount || 0), base + linked);
   }
 
@@ -233,6 +233,7 @@
     if (message.includes('TRIAL_ALREADY_STARTED')) return 'Seu período de experiência já foi iniciado em outro plano e não pode ser reiniciado.';
     if (message.includes('INVALID_TRIAL_PLAN')) return 'Não foi possível identificar o plano escolhido. Atualize a página e tente novamente.';
     if (message.includes('duplicate key') || error?.code === '23505') return 'Já existe um item com essas informações.';
+    if (message.includes('GOAL_REQUIRES_INCOME')) return 'Metas podem ser vinculadas apenas a entradas. Para dinheiro que você já tinha guardado, use o valor já acumulado da meta.';
     if (message.includes('INVALID_GOAL_REFERENCE')) return 'A meta vinculada não existe mais ou não pertence a esta conta.';
     if (message.includes('CATEGORY_TYPE_MISMATCH')) return 'A categoria escolhida não combina com o tipo do lançamento.';
     if (message.includes('foreign key')) return 'Este item está sendo usado em lançamentos e não pode ser excluído agora.';
@@ -879,7 +880,13 @@
     $('#tx-category').innerHTML = state.categories.filter((category) => category.type === transactionType).map((category) => `<option value="${category.id}">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</option>`).join('');
     $('#tx-account').innerHTML = state.accounts.map((account) => `<option value="${account.id}">${escapeHTML(account.icon)} ${escapeHTML(account.name)}</option>`).join('');
     const goalSelect = $('#tx-goal');
-    if (goalSelect) goalSelect.innerHTML = `<option value="">Nenhuma meta</option>${state.goals.map((goal) => `<option value="${goal.id}">${escapeHTML(goal.icon)} ${escapeHTML(goal.name)}</option>`).join('')}`;
+    const goalWrap = $('#tx-goal-wrap');
+    const canLinkGoal = hasPro() && transactionType === 'income';
+    if (goalWrap) goalWrap.hidden = !canLinkGoal;
+    if (goalSelect) {
+      goalSelect.innerHTML = `<option value="">Nenhuma meta</option>${state.goals.map((goal) => `<option value="${goal.id}">${escapeHTML(goal.icon)} ${escapeHTML(goal.name)}</option>`).join('')}`;
+      if (!canLinkGoal) goalSelect.value = '';
+    }
   }
 
   function renderFeatureLocks() {
@@ -929,7 +936,7 @@
     }
     editingTransactionId = id;
     const row = id ? state.transactions.find((item) => item.id === id) : null;
-    const type = row?.type || 'expense';
+    const type = row?.type || (transactionGoalPreset ? 'income' : 'expense');
     $(`input[name="transaction_type"][value="${type}"]`).checked = true;
     renderSelectOptions(type);
     $('#tx-description').value = row?.description || '';
@@ -962,7 +969,7 @@
         transaction_date: $('#tx-date').value,
         category_id: $('#tx-category').value,
         account_id: $('#tx-account').value,
-        goal_id: hasPro() ? ($('#tx-goal').value || null) : null,
+        goal_id: hasPro() && type === 'income' ? ($('#tx-goal').value || null) : null,
         status: $('#tx-status').value,
         recurring: $('#tx-recurring').checked,
         recurrence_interval: $('#tx-recurring').checked ? $('#tx-recurrence').value : null,
@@ -1035,6 +1042,11 @@
       fields.innerHTML = `<label class="full">Nome<input name="name" maxlength="80" required value="${escapeHTML(row?.name || '')}" placeholder="Ex: Mercado" /></label><label>Tipo<select name="type"><option value="expense">Saída</option><option value="income">Entrada</option></select></label><label>Limite mensal<div class="money-field"><span>R$</span><input name="budget" inputmode="decimal" value="${row ? Number(row.budget || 0).toFixed(2).replace('.', ',') : '0,00'}" /></div><small class="field-help">Disponível apenas para categorias de saída.</small></label><label>Ícone<input name="icon" maxlength="8" value="${escapeHTML(row?.icon || '•')}" /></label><label>Cor<input name="color" type="color" value="${escapeHTML(row?.color || '#4f7de8')}" /></label>`;
       const categoryTypeSelect = fields.querySelector('[name="type"]');
       categoryTypeSelect.value = row?.type || categoryType;
+      const categoryIsUsed = Boolean(row && state.transactions.some((transaction) => transaction.category_id === row.id));
+      if (categoryIsUsed) {
+        categoryTypeSelect.disabled = true;
+        categoryTypeSelect.title = 'O tipo não pode mudar porque esta categoria já possui lançamentos.';
+      }
       const budgetLabel = fields.querySelector('[name="budget"]')?.closest('label');
       const syncBudgetVisibility = () => {
         const expense = categoryTypeSelect.value === 'expense';
@@ -1121,10 +1133,13 @@
       transactionGoalPreset = null;
       return;
     }
-    $('#tx-description').value = `Aporte: ${goal.name}`;
+    const incomeRadio = $('input[name="transaction_type"][value="income"]');
+    if (incomeRadio) incomeRadio.checked = true;
+    renderSelectOptions('income');
+    $('#tx-description').value = `Entrada para ${goal.name}`;
     $('#tx-goal').value = id;
     setTimeout(() => $('#tx-amount')?.focus(), 50);
-    toast('Meta vinculada ao lançamento', 'Preencha o valor, a conta e a categoria. O progresso será atualizado quando o lançamento estiver realizado.');
+    toast('Meta vinculada à entrada', 'O progresso aumenta quando esta entrada estiver marcada como recebida. Dinheiro que você já tinha guardado deve entrar em “Valor já acumulado” da meta.');
   }
 
   function exportCSV(monthFilter = null) {
@@ -1324,6 +1339,7 @@
       state.transactions.filter((row) => row.description.toLowerCase().includes(query)).slice(0, 5).forEach((row) => results.push({ icon: categoryById(row.category_id).icon, title: row.description, subtitle: `${brl.format(Number(row.amount))} · Lançamento`, view: 'transactions' }));
       state.accounts.filter((row) => row.name.toLowerCase().includes(query)).slice(0, 4).forEach((row) => results.push({ icon: row.icon, title: row.name, subtitle: `${brl.format(accountBalance(row.id))} · Conta`, view: 'accounts' }));
       state.categories.filter((row) => row.name.toLowerCase().includes(query)).slice(0, 4).forEach((row) => results.push({ icon: row.icon, title: row.name, subtitle: 'Categoria', view: 'categories' }));
+      if (hasPro()) state.goals.filter((row) => row.name.toLowerCase().includes(query)).slice(0, 4).forEach((row) => results.push({ icon: row.icon, title: row.name, subtitle: 'Meta', view: 'goals' }));
     }
     $('#global-search-results').innerHTML = query ? (results.length ? results.map((result) => `<button class="search-result" data-search-view="${result.view}"><span>${escapeHTML(result.icon)}</span><div><strong>${escapeHTML(result.title)}</strong><small>${escapeHTML(result.subtitle)}</small></div><b>→</b></button>`).join('') : emptyState('⌕', 'Nada encontrado', 'Tente outro termo.')) : '<div class="empty-state"><span>⌕</span><strong>Busca global</strong><p>Procure lançamentos, contas ou categorias.</p></div>';
     $$('[data-search-view]').forEach((button) => button.addEventListener('click', () => { closeModals(); switchView(button.dataset.searchView); }));
@@ -1541,10 +1557,10 @@
     $$('#transaction-filters [data-filter]').forEach((button) => button.addEventListener('click', () => { transactionFilter = button.dataset.filter; $$('#transaction-filters button').forEach((item) => item.classList.toggle('active', item === button)); renderTransactions(); }));
     $('#transaction-search').addEventListener('input', renderTransactions);
     $('#report-month').addEventListener('change', (event) => { reportMonthKey = event.target.value || currentMonthKey(); renderReports(); });
-    $('#export-csv').addEventListener('click', exportCSV);
+    $('#export-csv').addEventListener('click', () => exportCSV());
     $('#reports-export').addEventListener('click', () => exportCSV(reportMonthKey));
-    $('#settings-export').addEventListener('click', exportCSV);
-    $('#paywall-export').addEventListener('click', exportCSV);
+    $('#settings-export').addEventListener('click', () => exportCSV());
+    $('#paywall-export').addEventListener('click', () => exportCSV());
     $('#profile-form').addEventListener('submit', saveProfile);
     $('#logout-button').addEventListener('click', logout);
     $('#paywall-logout').addEventListener('click', logout);
