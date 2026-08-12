@@ -1,0 +1,22 @@
+/* SalesBoard Finance — landing cross-device quality hardening */
+.marketing-nav a{display:inline-flex;align-items:center;min-height:36px;padding:6px 4px}
+.mock-heading button{min-height:36px;padding:8px 12px}
+.billing-toggle button{min-height:38px;padding-top:8px;padding-bottom:8px}
+.security-card a{display:inline-flex;align-items:center;min-height:36px;padding:7px 0}
+.footer-links a{display:inline-flex;align-items:center;min-height:34px}
+
+.marketing-site,.hero,.hero-content,.hero-product-wrap,.feature-bento,.pricing-grid,.comparison-wrap{min-width:0}
+img,svg{max-width:100%}
+
+@media(max-width:420px){
+  .hero-actions .btn{width:100%}
+  .launch-proof{justify-content:center}
+  .pricing-grid,.feature-bento{min-width:0}
+}
+
+@media(max-width:340px){
+  .marketing-header{padding-left:12px;padding-right:12px}
+  .hero,.section-light,.security-section,.comparison-section,.faq-section{padding-left:12px;padding-right:12px}
+  .hero h1{overflow-wrap:anywhere}
+  .price-card,.feature-card{min-width:0}
+}
