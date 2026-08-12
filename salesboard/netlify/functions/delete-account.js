@@ -15,17 +15,27 @@ exports.handler = async (event) => {
       return json(400, { error: 'Confirmação inválida.' });
     }
 
-    const { data: subscription } = await admin
+    const { data: subscription, error: subscriptionLookupError } = await admin
       .from('subscriptions')
       .select('stripe_subscription_id,status')
       .eq('user_id', user.id)
       .maybeSingle();
+    if (subscriptionLookupError) throw subscriptionLookupError;
 
-    if (subscription?.stripe_subscription_id && process.env.STRIPE_SECRET_KEY && subscription.status !== 'canceled') {
+    const hasLiveStripeSubscription = subscription?.stripe_subscription_id && subscription.status !== 'canceled';
+    if (hasLiveStripeSubscription) {
+      // Never delete the local account while a paid Stripe subscription could keep charging.
+      if (!process.env.STRIPE_SECRET_KEY) {
+        const configurationError = new Error('Não é seguro excluir a conta enquanto a integração de cobrança está indisponível. Tente novamente ou contate o suporte.');
+        configurationError.code = 'BILLING_CONFIGURATION_REQUIRED';
+        throw configurationError;
+      }
+
       const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
       try {
         await stripe.subscriptions.cancel(subscription.stripe_subscription_id);
       } catch (error) {
+        // If Stripe says the subscription no longer exists, local deletion can proceed.
         if (error?.code !== 'resource_missing') throw error;
       }
     }
@@ -35,6 +45,9 @@ exports.handler = async (event) => {
 
     return json(200, { deleted: true });
   } catch (error) {
+    if (error?.code === 'BILLING_CONFIGURATION_REQUIRED') {
+      return json(503, { error: error.message });
+    }
     return safeError(error);
   }
 };
