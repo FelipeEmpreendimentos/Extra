@@ -50,6 +50,8 @@ jobs:
           test -f salesboard/supabase/schema.sql
           test -f salesboard/supabase/002_integrity.sql
           test -f salesboard/supabase/003_recurring.sql
+          test -f salesboard/supabase/004_three_day_trial.sql
+          test -f salesboard/supabase/005_lock_entitlement_rpc.sql
           test -f salesboard/netlify/functions/_shared.js
           test -f salesboard/netlify/functions/public-config.js
           test -f salesboard/netlify/functions/create-checkout-session.js
@@ -81,6 +83,8 @@ jobs:
           grep -Fq 'current_entitlement' salesboard/supabase/schema.sql
           grep -Fq 'validate_transaction_references' salesboard/supabase/002_integrity.sql
           grep -Fq 'validate_recurrence_source' salesboard/supabase/003_recurring.sql
+          grep -Fq "interval '3 days'" salesboard/supabase/schema.sql
+          grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
           grep -Fq 'constructEvent' salesboard/netlify/functions/stripe-webhook.js
           grep -Fq 'verifyUser' salesboard/netlify/functions/create-checkout-session.js
           grep -Fq 'SUPABASE_SECRET_KEY' salesboard/netlify/functions/_shared.js
@@ -134,13 +138,25 @@ jobs:
           test ! -e .ci-dist/.env.example
           test ! -e .ci-dist/package.json
 
-      - name: Check launch transparency and legal flows
+      - name: Check launch transparency and product rules
         run: |
-          grep -Fq '7 dias grátis' salesboard/index.html
+          grep -Fq '3 dias grátis' salesboard/index.html
+          if grep -Fq '7 dias grátis' salesboard/index.html; then
+            echo 'Old 7-day trial copy must not remain on the landing page'
+            exit 1
+          fi
           grep -Fq 'data-monthly="14,90"' salesboard/index.html
           grep -Fq 'data-monthly="24,90"' salesboard/index.html
           grep -Fq 'data-annual="12,42"' salesboard/index.html
           grep -Fq 'data-annual="20,75"' salesboard/index.html
+          grep -Fq 'Até 3 contas ativas' salesboard/index.html
+          grep -Fq 'Relatórios avançados de 12 meses' salesboard/index.html
+          grep -Fq 'google-auth-button' salesboard/app/index.html
+          grep -Fq "provider: 'google'" salesboard/app/app.js
+          grep -Fq 'report-year-chart' salesboard/app/index.html
+          grep -Fq 'renderYearReportChart' salesboard/app/app.js
+          grep -Fq "workspace_name: 'Demonstração Pro'" salesboard/app/app.js
+          grep -Fq "subscription_status: 'active'" salesboard/app/app.js
           grep -Fq 'legal/privacidade.html' salesboard/index.html
           grep -Fq 'legal/termos.html' salesboard/index.html
           grep -Fq 'data-netlify="true"' salesboard/contato.html
