@@ -18,127 +18,133 @@ jobs:
       - name: Append atomic onboarding bridge
         shell: bash
         run: |
-          if ! grep -q "SB_ATOMIC_ONBOARDING_V1" salesboard/app/runtime-bridge.js; then
-            cat >> salesboard/app/runtime-bridge.js <<'JS'
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('salesboard/app/runtime-bridge.js')
+          text = path.read_text(encoding='utf-8')
+          marker = 'SB_ATOMIC_ONBOARDING_V1'
+          patch = r'''
 
-// SB_ATOMIC_ONBOARDING_V1
-(() => {
-  'use strict';
+          // SB_ATOMIC_ONBOARDING_V1
+          (() => {
+            'use strict';
 
-  const form = document.getElementById('onboarding-form');
-  const finishButton = document.getElementById('onboarding-finish');
-  if (!form || !finishButton || form.dataset.sbAtomicOnboarding === '1') return;
+            const form = document.getElementById('onboarding-form');
+            const finishButton = document.getElementById('onboarding-finish');
+            if (!form || !finishButton || form.dataset.sbAtomicOnboarding === '1') return;
 
-  form.dataset.sbAtomicOnboarding = '1';
-  form.noValidate = true;
-  form.setAttribute('novalidate', 'novalidate');
+            form.dataset.sbAtomicOnboarding = '1';
+            form.noValidate = true;
+            form.setAttribute('novalidate', 'novalidate');
 
-  function moneyToNumber(value) {
-    const digits = String(value ?? '').replace(/\D/g, '');
-    return digits ? Number(digits) / 100 : 0;
-  }
+            function moneyToNumber(value) {
+              const digits = String(value ?? '').replace(/\D/g, '');
+              return digits ? Number(digits) / 100 : 0;
+            }
 
-  function ensureStatus() {
-    let status = document.getElementById('sb-onboarding-status');
-    if (status) return status;
-    status = document.createElement('div');
-    status.id = 'sb-onboarding-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    status.style.cssText = 'margin:12px 0 0;padding:12px 14px;border-radius:12px;font:600 13px/1.45 Inter,sans-serif;display:none';
-    const footer = form.querySelector('footer');
-    footer?.parentNode?.insertBefore(status, footer);
-    return status;
-  }
+            function ensureStatus() {
+              let status = document.getElementById('sb-onboarding-status');
+              if (status) return status;
+              status = document.createElement('div');
+              status.id = 'sb-onboarding-status';
+              status.setAttribute('role', 'status');
+              status.setAttribute('aria-live', 'polite');
+              status.style.cssText = 'margin:12px 0 0;padding:12px 14px;border-radius:12px;font:600 13px/1.45 Inter,sans-serif;display:none';
+              const footer = form.querySelector('footer');
+              footer?.parentNode?.insertBefore(status, footer);
+              return status;
+            }
 
-  function showStatus(message, error = false) {
-    const status = ensureStatus();
-    if (!status) return;
-    status.textContent = message;
-    status.style.display = message ? 'block' : 'none';
-    status.style.color = error ? '#b91c1c' : '#047857';
-    status.style.background = error ? '#fff1f2' : '#ecfdf5';
-    status.style.border = `1px solid ${error ? '#fecdd3' : '#a7f3d0'}`;
-  }
+            function showStatus(message, error = false) {
+              const status = ensureStatus();
+              if (!status) return;
+              status.textContent = message;
+              status.style.display = message ? 'block' : 'none';
+              status.style.color = error ? '#b91c1c' : '#047857';
+              status.style.background = error ? '#fff1f2' : '#ecfdf5';
+              status.style.border = `1px solid ${error ? '#fecdd3' : '#a7f3d0'}`;
+            }
 
-  function friendlyError(error) {
-    const message = String(error?.message || error || '');
-    if (message.includes('TERMS_REQUIRED')) return 'Aceite os Termos de Uso e a Política de Privacidade para continuar.';
-    if (message.includes('SUBSCRIPTION_REQUIRED')) return 'Seu acesso precisa de um plano ativo para concluir a configuração.';
-    if (message.includes('AUTH_REQUIRED')) return 'Sua sessão expirou. Entre novamente e continue a configuração.';
-    if (message.includes('INVALID_WORKSPACE_TYPE') || message.includes('INVALID_ACCOUNT_TYPE')) return 'Revise as informações das etapas anteriores e tente novamente.';
-    if (message.includes('INVALID_OPENING_BALANCE')) return 'O saldo inicial informado não é válido.';
-    if (message.includes('duplicate key')) return 'Essa configuração já existe. Atualize a página para continuar.';
-    return message && message.length < 180 ? message : 'Não foi possível concluir sua configuração. Tente novamente.';
-  }
+            function friendlyError(error) {
+              const message = String(error?.message || error || '');
+              if (message.includes('TERMS_REQUIRED')) return 'Aceite os Termos de Uso e a Política de Privacidade para continuar.';
+              if (message.includes('SUBSCRIPTION_REQUIRED')) return 'Seu acesso precisa de um plano ativo para concluir a configuração.';
+              if (message.includes('AUTH_REQUIRED')) return 'Sua sessão expirou. Entre novamente e continue a configuração.';
+              if (message.includes('INVALID_WORKSPACE_TYPE') || message.includes('INVALID_ACCOUNT_TYPE')) return 'Revise as informações das etapas anteriores e tente novamente.';
+              if (message.includes('INVALID_OPENING_BALANCE')) return 'O saldo inicial informado não é válido.';
+              if (message.includes('duplicate key')) return 'Essa configuração já existe. Atualize a página para continuar.';
+              return message && message.length < 180 ? message : 'Não foi possível concluir sua configuração. Tente novamente.';
+            }
 
-  form.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
+            form.addEventListener('submit', async (event) => {
+              event.preventDefault();
+              event.stopImmediatePropagation();
 
-    if (finishButton.disabled) return;
-    const termsWrap = document.getElementById('oauth-terms-wrap');
-    const termsCheckbox = document.getElementById('oauth-accept-terms');
-    const needsTerms = Boolean(termsWrap && !termsWrap.hidden);
-    const acceptedTerms = Boolean(termsCheckbox?.checked);
+              if (finishButton.disabled) return;
+              const termsWrap = document.getElementById('oauth-terms-wrap');
+              const termsCheckbox = document.getElementById('oauth-accept-terms');
+              const needsTerms = Boolean(termsWrap && !termsWrap.hidden);
+              const acceptedTerms = Boolean(termsCheckbox?.checked);
 
-    if (needsTerms && !acceptedTerms) {
-      showStatus('Aceite os Termos de Uso e a Política de Privacidade para continuar.', true);
-      termsCheckbox?.focus();
-      return;
-    }
+              if (needsTerms && !acceptedTerms) {
+                showStatus('Aceite os Termos de Uso e a Política de Privacidade para continuar.', true);
+                termsCheckbox?.focus();
+                return;
+              }
 
-    const selectedWorkspace = document.querySelector('input[name="workspace_type"]:checked');
-    const workspaceType = selectedWorkspace?.value || 'personal';
-    const workspaceName = document.getElementById('workspace-name-input')?.value?.trim() || 'Meu espaço';
-    const accountName = document.getElementById('first-account-name')?.value?.trim() || 'Conta principal';
-    const accountType = document.getElementById('first-account-type')?.value || 'bank';
-    const openingBalance = moneyToNumber(document.getElementById('first-account-balance')?.value || '0,00');
-    const createBudgets = Boolean(document.getElementById('create-default-budgets')?.checked);
+              const selectedWorkspace = document.querySelector('input[name="workspace_type"]:checked');
+              const workspaceType = selectedWorkspace?.value || 'personal';
+              const workspaceName = document.getElementById('workspace-name-input')?.value?.trim() || 'Meu espaço';
+              const accountName = document.getElementById('first-account-name')?.value?.trim() || 'Conta principal';
+              const accountType = document.getElementById('first-account-type')?.value || 'bank';
+              const openingBalance = moneyToNumber(document.getElementById('first-account-balance')?.value || '0,00');
+              const createBudgets = Boolean(document.getElementById('create-default-budgets')?.checked);
 
-    const originalText = finishButton.textContent;
-    finishButton.disabled = true;
-    finishButton.textContent = 'Criando seu espaço...';
-    showStatus('Organizando sua conta, categorias e preferências...', false);
+              const originalText = finishButton.textContent;
+              finishButton.disabled = true;
+              finishButton.textContent = 'Criando seu espaço...';
+              showStatus('Organizando sua conta, categorias e preferências...', false);
 
-    try {
-      if (!window.supabase?.createClient) throw new Error('Serviço de autenticação indisponível. Atualize a página e tente novamente.');
-      const runtime = window.SALESBOARD_RUNTIME;
-      if (!runtime?.projectUrl || !runtime?.publishableKey) throw new Error('Configuração do aplicativo indisponível.');
+              try {
+                if (!window.supabase?.createClient) throw new Error('Serviço de autenticação indisponível. Atualize a página e tente novamente.');
+                const runtime = window.SALESBOARD_RUNTIME;
+                if (!runtime?.projectUrl || !runtime?.publishableKey) throw new Error('Configuração do aplicativo indisponível.');
 
-      const client = window.supabase.createClient(runtime.projectUrl, runtime.publishableKey, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
-      });
-      const { data: sessionData, error: sessionError } = await client.auth.getSession();
-      if (sessionError || !sessionData?.session) throw new Error('AUTH_REQUIRED');
+                const client = window.supabase.createClient(runtime.projectUrl, runtime.publishableKey, {
+                  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+                });
+                const { data: sessionData, error: sessionError } = await client.auth.getSession();
+                if (sessionError || !sessionData?.session) throw new Error('AUTH_REQUIRED');
 
-      const { error } = await client.rpc('complete_salesboard_onboarding', {
-        p_workspace_type: workspaceType,
-        p_workspace_name: workspaceName,
-        p_account_name: accountName,
-        p_account_type: accountType,
-        p_opening_balance: openingBalance,
-        p_create_budgets: createBudgets,
-        p_accept_terms: acceptedTerms
-      });
-      if (error) throw error;
+                const { error } = await client.rpc('complete_salesboard_onboarding', {
+                  p_workspace_type: workspaceType,
+                  p_workspace_name: workspaceName,
+                  p_account_name: accountName,
+                  p_account_type: accountType,
+                  p_opening_balance: openingBalance,
+                  p_create_budgets: createBudgets,
+                  p_accept_terms: acceptedTerms
+                });
+                if (error) throw error;
 
-      showStatus('Tudo pronto. Abrindo seu painel...', false);
-      finishButton.textContent = 'Tudo pronto ✓';
-      const cleanUrl = new URL(location.href);
-      cleanUrl.search = '';
-      cleanUrl.hash = '';
-      setTimeout(() => location.replace(cleanUrl.href), 180);
-    } catch (error) {
-      finishButton.disabled = false;
-      finishButton.textContent = originalText;
-      showStatus(friendlyError(error), true);
-      console.error('[SalesBoard onboarding]', error);
-    }
-  }, true);
-})();
-JS
-          fi
+                showStatus('Tudo pronto. Abrindo seu painel...', false);
+                finishButton.textContent = 'Tudo pronto ✓';
+                const cleanUrl = new URL(location.href);
+                cleanUrl.search = '';
+                cleanUrl.hash = '';
+                setTimeout(() => location.replace(cleanUrl.href), 180);
+              } catch (error) {
+                finishButton.disabled = false;
+                finishButton.textContent = originalText;
+                showStatus(friendlyError(error), true);
+                console.error('[SalesBoard onboarding]', error);
+              }
+            }, true);
+          })();
+          '''
+          if marker not in text:
+              path.write_text(text + patch, encoding='utf-8')
+          PY
           node --check salesboard/app/runtime-bridge.js
       - name: Commit patch
         shell: bash
