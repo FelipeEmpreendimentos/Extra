@@ -66,7 +66,7 @@
   }
 
   function showOnly(id) {
-    ['boot-screen', 'setup-error', 'auth-screen', 'recovery-screen', 'onboarding-screen', 'paywall-screen', 'app-shell'].forEach((screenId) => {
+    ['boot-screen', 'setup-error', 'auth-screen', 'forgot-screen', 'recovery-screen', 'onboarding-screen', 'paywall-screen', 'app-shell'].forEach((screenId) => {
       const element = document.getElementById(screenId);
       if (element) element.hidden = screenId !== id;
     });
@@ -105,6 +105,43 @@
       button.disabled = false;
       button.textContent = button.dataset.originalText || button.textContent;
       delete button.dataset.originalText;
+    }
+  }
+
+  function appBaseUrl(query = '') {
+    const url = new URL('./', location.href);
+    url.search = query ? (query.startsWith('?') ? query : `?${query}`) : '';
+    url.hash = '';
+    return url.href;
+  }
+
+  function authErrorMessage(error) {
+    const code = String(error?.code || '').toLowerCase();
+    const message = String(error?.message || error || '').toLowerCase();
+    if (code === 'email_not_confirmed' || message.includes('email not confirmed')) return 'Seu e-mail ainda não foi confirmado. Abra o e-mail enviado pelo SalesBoard e confirme sua conta antes de entrar.';
+    if (code === 'invalid_credentials' || message.includes('invalid login credentials')) return 'E-mail ou senha incorretos. Confira os dados e tente novamente.';
+    if (code === 'over_email_send_rate_limit' || message.includes('after 45 seconds') || message.includes('rate limit')) return 'Aguarde alguns segundos antes de pedir outro e-mail. Isso protege sua conta contra abuso.';
+    if (message.includes('provider is not enabled')) return 'O login com Google ainda não foi ativado no servidor. Use e-mail e senha por enquanto.';
+    if (code === 'user_already_exists' || message.includes('already registered') || message.includes('already exists')) return 'Já existe uma conta com este e-mail. Entre normalmente ou use “Esqueci a senha”.';
+    if (message.includes('password should be')) return 'A senha não atende aos requisitos de segurança. Use pelo menos 8 caracteres.';
+    return friendlyError(error);
+  }
+
+  function setInlineMessage(selector, message, error = false) {
+    const box = $(selector);
+    if (!box) return;
+    box.hidden = !message;
+    box.textContent = message || '';
+    box.classList.toggle('error', Boolean(error));
+  }
+
+  async function waitForBillingSync(attempts = 8) {
+    if (demoMode || !supabaseClient || !state.user) return;
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const { data } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
+      if (data) state.profile = data;
+      if (data?.subscription_status === 'active') return;
+      await new Promise((resolve) => setTimeout(resolve, 750));
     }
   }
 
@@ -263,7 +300,9 @@
     }
     state.profile = profile;
 
-    if (!profile.onboarded) {
+    if (params.get('checkout') === 'success') await waitForBillingSync();
+
+    if (!state.profile.onboarded) {
       setupOnboarding();
       showOnly('onboarding-screen');
       return;
@@ -965,7 +1004,7 @@
       const { data } = await supabaseClient.auth.getSession();
       const token = data.session?.access_token;
       if (!token) throw new Error('Sua sessão expirou. Entre novamente.');
-      const response = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ plan, billingCycle }) });
+      const response = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ plan, billingCycle, requestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}` }) });
       const payload = await response.json();
       if (response.status === 409 && payload.code === 'SUBSCRIPTION_EXISTS') {
         toast('Assinatura já existente', payload.error, 'error');
@@ -1172,16 +1211,17 @@
     setButtonLoading(button, true, 'Abrindo Google...');
     setAuthMessage('');
     try {
-      const redirectTo = `${location.origin}${location.pathname}?oauth=google`;
-      const { error } = await supabaseClient.auth.signInWithOAuth({
+      sessionStorage.setItem('salesboard_oauth_intent', JSON.stringify({ plan: requestedPlan, billing: billingCycle, createdAt: Date.now() }));
+      const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo, queryParams: { prompt: 'select_account' } }
+        options: { redirectTo: appBaseUrl('oauth=google'), skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } }
       });
       if (error) throw error;
+      if (!data?.url) throw new Error('Não foi possível iniciar o login com Google.');
+      location.assign(data.url);
     } catch (error) {
       setButtonLoading(button, false);
-      const message = String(error?.message || error || '');
-      setAuthMessage(message.toLowerCase().includes('provider') ? 'O login com Google ainda precisa ser ativado no Supabase Auth. Use e-mail e senha enquanto a configuração externa não estiver concluída.' : friendlyError(error), true);
+      setAuthMessage(authErrorMessage(error), true);
     }
   }
 
@@ -1203,7 +1243,7 @@
         session = data.session;
         await initializeAuthenticatedUser();
       } catch (error) {
-        setAuthMessage('E-mail ou senha inválidos. Confira os dados e tente novamente.', true);
+        setAuthMessage(authErrorMessage(error), true);
       } finally {
         setButtonLoading(button, false);
       }
@@ -1239,32 +1279,79 @@
           $('#login-email').value = email;
         }
       } catch (error) {
-        setAuthMessage(friendlyError(error), true);
+        setAuthMessage(authErrorMessage(error), true);
       } finally {
         setButtonLoading(button, false);
       }
     });
-    $('#forgot-password').addEventListener('click', async () => {
-      const email = $('#login-email').value.trim() || prompt('Qual e-mail está cadastrado na sua conta?') || '';
-      if (!email) return;
+    $('#forgot-password').addEventListener('click', () => {
+      $('#forgot-email').value = $('#login-email').value.trim();
+      setInlineMessage('#forgot-status', '');
+      showOnly('forgot-screen');
+    });
+    $('#forgot-back').addEventListener('click', () => showAuth('login'));
+    $('#forgot-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = event.currentTarget.querySelector('button[type="submit"]');
+      const email = $('#forgot-email').value.trim();
+      setButtonLoading(button, true, 'Enviando...');
+      setInlineMessage('#forgot-status', '');
       try {
-        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: `${location.origin}${location.pathname}?recovery=1` });
+        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: appBaseUrl('recovery=1') });
         if (error) throw error;
-        setAuthMessage('Enviamos um link de recuperação para o seu e-mail.');
+        setInlineMessage('#forgot-status', 'Se este e-mail estiver cadastrado, o link de recuperação foi enviado. Confira também a caixa de spam.');
       } catch (error) {
-        setAuthMessage(friendlyError(error), true);
+        setInlineMessage('#forgot-status', authErrorMessage(error), true);
+      } finally {
+        setButtonLoading(button, false);
       }
     });
+    $('#resend-confirmation').addEventListener('click', async (event) => {
+      const button = event.currentTarget;
+      const email = button.dataset.email || $('#register-email').value.trim();
+      if (!email) return;
+      setButtonLoading(button, true, 'Reenviando...');
+      try {
+        const { error } = await supabaseClient.auth.resend({ type: 'signup', email, options: { emailRedirectTo: appBaseUrl() } });
+        if (error) throw error;
+        setAuthMessage('Novo e-mail de confirmação enviado. Aguarde pelo menos 45 segundos antes de pedir outro.');
+      } catch (error) {
+        setAuthMessage(authErrorMessage(error), true);
+      } finally {
+        setTimeout(() => setButtonLoading(button, false), 45000);
+      }
+    });
+    const updateRecoveryRules = () => {
+      const password = $('#recovery-password').value;
+      const confirmPassword = $('#recovery-password-confirm').value;
+      $('#rule-length').textContent = `${password.length >= 8 ? '✓' : '○'} 8 ou mais caracteres`;
+      $('#rule-match').textContent = `${password && password === confirmPassword ? '✓' : '○'} As duas senhas são iguais`;
+    };
+    $('#recovery-password').addEventListener('input', updateRecoveryRules);
+    $('#recovery-password-confirm').addEventListener('input', updateRecoveryRules);
     $('#recovery-form').addEventListener('submit', async (event) => {
       event.preventDefault();
+      const button = event.currentTarget.querySelector('button[type="submit"]');
+      const password = $('#recovery-password').value;
+      const confirmPassword = $('#recovery-password-confirm').value;
+      if (password.length < 8) return setInlineMessage('#recovery-message', 'Use pelo menos 8 caracteres.', true);
+      if (password !== confirmPassword) return setInlineMessage('#recovery-message', 'As duas senhas precisam ser iguais.', true);
+      setButtonLoading(button, true, 'Salvando...');
+      setInlineMessage('#recovery-message', '');
       try {
-        const { error } = await supabaseClient.auth.updateUser({ password: $('#recovery-password').value });
+        const email = session?.user?.email || '';
+        const { error } = await supabaseClient.auth.updateUser({ password });
         if (error) throw error;
-        toast('Senha atualizada');
-        history.replaceState({}, '', './');
-        await initializeAuthenticatedUser();
+        await supabaseClient.auth.signOut();
+        session = null;
+        history.replaceState({}, '', appBaseUrl());
+        showAuth('login');
+        if (email) $('#login-email').value = email;
+        setAuthMessage('Senha atualizada com sucesso. Entre novamente usando sua nova senha.');
       } catch (error) {
-        toast('Não foi possível atualizar a senha', friendlyError(error), 'error');
+        setInlineMessage('#recovery-message', authErrorMessage(error), true);
+      } finally {
+        setButtonLoading(button, false);
       }
     });
     $('#onboarding-next').addEventListener('click', () => { if (onboardingStep < 3) { onboardingStep += 1; updateOnboardingStep(); } });
