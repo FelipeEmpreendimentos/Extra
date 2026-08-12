@@ -6,19 +6,36 @@ const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || ''
 const stripe = new Stripe(stripeSecret, { httpClient: Stripe.createFetchHttpClient() })
 const cryptoProvider = Stripe.createSubtleCryptoProvider()
 
+const TEST_PRICE_MAP: Record<string, { plan: 'essential' | 'pro'; billing: 'monthly' | 'annual' }> = {
+  'price_1U3eqnRlODNbnkUiLRDXlIZm': { plan: 'essential', billing: 'monthly' },
+  'price_1U3erCRlODNbnkUiYSxDq1e6': { plan: 'essential', billing: 'annual' },
+  'price_1U3eqyRlODNbnkUirbXIqvR8': { plan: 'pro', billing: 'monthly' },
+  'price_1U3erNRlODNbnkUiCYny1NeZ': { plan: 'pro', billing: 'annual' }
+}
+
+function priceMap() {
+  const map: Record<string, { plan: 'essential' | 'pro'; billing: 'monthly' | 'annual' }> = {}
+  const configured = [
+    ['STRIPE_PRICE_ESSENTIAL_MONTHLY', 'essential', 'monthly'],
+    ['STRIPE_PRICE_ESSENTIAL_ANNUAL', 'essential', 'annual'],
+    ['STRIPE_PRICE_PRO_MONTHLY', 'pro', 'monthly'],
+    ['STRIPE_PRICE_PRO_ANNUAL', 'pro', 'annual']
+  ] as const
+  for (const [env, plan, billing] of configured) {
+    const id = Deno.env.get(env)
+    if (id) map[id] = { plan, billing }
+  }
+  if (stripeSecret.startsWith('sk_test_')) Object.assign(map, TEST_PRICE_MAP)
+  return map
+}
+
 function adminClient() {
   const url = Deno.env.get('SUPABASE_URL')!
   const legacy = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const modern = Deno.env.get('SUPABASE_SECRET_KEYS')
   const key = legacy || (modern ? JSON.parse(modern).default : '')
+  if (!url || !key) throw new Error('SUPABASE_NOT_CONFIGURED')
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
-}
-
-const priceMap: Record<string, { plan: 'essential' | 'pro'; billing: 'monthly' | 'annual' }> = {
-  'price_1U3eqnRlODNbnkUiLRDXlIZm': { plan: 'essential', billing: 'monthly' },
-  'price_1U3erCRlODNbnkUiYSxDq1e6': { plan: 'essential', billing: 'annual' },
-  'price_1U3eqyRlODNbnkUirbXIqvR8': { plan: 'pro', billing: 'monthly' },
-  'price_1U3erNRlODNbnkUiCYny1NeZ': { plan: 'pro', billing: 'annual' }
 }
 
 async function profileExists(admin: ReturnType<typeof adminClient>, userId: string) {
@@ -38,13 +55,16 @@ async function userIdForCustomer(admin: ReturnType<typeof adminClient>, customer
 async function syncSubscription(admin: ReturnType<typeof adminClient>, subscription: Stripe.Subscription) {
   const item = subscription.items.data[0]
   const priceId = item?.price?.id || null
-  const mapped = priceId ? priceMap[priceId] : null
+  const mapped = priceId ? priceMap()[priceId] : null
   const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id
   const userId = subscription.metadata?.salesboard_user_id || await userIdForCustomer(admin, subscription.customer)
   if (!userId || !(await profileExists(admin, userId))) return
 
-  const plan = subscription.metadata?.salesboard_plan === 'essential' ? 'essential' : subscription.metadata?.salesboard_plan === 'pro' ? 'pro' : mapped?.plan || 'pro'
-  const billing = subscription.metadata?.billing_cycle === 'annual' ? 'annual' : subscription.metadata?.billing_cycle === 'monthly' ? 'monthly' : mapped?.billing || 'monthly'
+  // Current Price ID is authoritative. Metadata is only a fallback for legacy or unmapped prices.
+  const metadataPlan = subscription.metadata?.salesboard_plan === 'essential' ? 'essential' : subscription.metadata?.salesboard_plan === 'pro' ? 'pro' : null
+  const metadataBilling = subscription.metadata?.billing_cycle === 'annual' ? 'annual' : subscription.metadata?.billing_cycle === 'monthly' ? 'monthly' : null
+  const plan: 'essential' | 'pro' = mapped?.plan || metadataPlan || 'pro'
+  const billing: 'monthly' | 'annual' = mapped?.billing || metadataBilling || 'monthly'
   const normalized = ['active', 'trialing', 'past_due', 'canceled'].includes(subscription.status) ? subscription.status : 'none'
   const period = subscription.items.data[0]?.current_period_end
 
