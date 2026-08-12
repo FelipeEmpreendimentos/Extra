@@ -1,0 +1,45 @@
+name: Apply SalesBoard product coherence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/salesboard-product-coherence-temp.yml"
+      - "salesboard/scripts/apply_product_coherence.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Apply coherence patch
+        run: python salesboard/scripts/apply_product_coherence.py
+
+      - name: Validate JavaScript and required relationships
+        run: |
+          node --check salesboard/app/app.js
+          node --check salesboard/app.js
+          grep -Fq 'id="report-month"' salesboard/app/index.html
+          grep -Fq 'id="tx-goal"' salesboard/app/index.html
+          grep -Fq 'goal_id' salesboard/app/app.js
+          grep -Fq 'complete_salesboard_onboarding' salesboard/app/app.js
+          if grep -Fq '2 meses grátis' salesboard/index.html salesboard/app/index.html; then exit 1; fi
+
+      - name: Commit product coherence changes
+        run: |
+          if git diff --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app/index.html salesboard/app/app.js salesboard/app/quality.css salesboard/index.html salesboard/README.md .github/workflows/salesboard-production-check.yml
+          git commit -m "Align SalesBoard product flows and monthly reports"
+          git push origin main
