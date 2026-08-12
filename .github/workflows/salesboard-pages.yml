@@ -27,13 +27,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Prepare public SalesBoard artifact
+        working-directory: salesboard
+        run: |
+          rm -rf .pages-dist
+          mkdir -p .pages-dist
+          cp index.html styles.css launch.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .pages-dist/
+          cp -R app legal .pages-dist/
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload SalesBoard
         uses: actions/upload-pages-artifact@v4
         with:
-          path: ./salesboard
+          path: ./salesboard/.pages-dist
 
       - name: Deploy to GitHub Pages
         id: deployment
