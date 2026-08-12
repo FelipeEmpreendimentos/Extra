@@ -1,0 +1,40 @@
+name: Align SalesBoard marketing copy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/salesboard-copy-coherence-temp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - name: Align goal copy with real flow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('salesboard/index.html')
+          text = path.read_text(encoding='utf-8')
+          old = 'No Pro, defina objetivos, registre aportes e acompanhe exatamente quanto falta.'
+          new = 'No Pro, defina objetivos, destine parte das suas entradas às metas e acompanhe exatamente quanto falta.'
+          if text.count(old) != 1:
+              raise SystemExit('Expected goal marketing copy was not found exactly once.')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          grep -Fq 'destine parte das suas entradas às metas' salesboard/index.html
+          if grep -Fq 'registre aportes' salesboard/index.html; then exit 1; fi
+      - name: Commit copy correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/index.html
+          git commit -m "Align goal marketing copy with real flow"
+          git push origin main
