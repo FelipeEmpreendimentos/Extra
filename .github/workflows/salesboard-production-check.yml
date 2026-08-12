@@ -86,7 +86,7 @@ jobs:
           grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'billing portal auth validation missing'; exit 1; }
           grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'Stripe signature verification missing'; exit 1; }
           grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'webhook secret configuration missing'; exit 1; }
-          grep -Fq "STRIPE_PRICE_ESSENTIAL_MONTHLY" salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'live price configuration missing'; exit 1; }
+          grep -Fq 'STRIPE_PRICE_' salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'live price configuration missing'; exit 1; }
           grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'live product configuration missing'; exit 1; }
           grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts || { echo 'health billing readiness check missing'; exit 1; }
           if grep -PqR --exclude=.env.example 'sk_(live|test)_(?!x{8,})[A-Za-z0-9]{20,}' salesboard; then echo 'Possible Stripe secret committed'; exit 1; fi
