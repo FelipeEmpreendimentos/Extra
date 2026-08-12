@@ -39,7 +39,7 @@ begin
 end;
 $$;
 
-revoke all on function public.validate_recurrence_source() from public;
+revoke all on function public.validate_recurrence_source() from public, anon, authenticated;
 
 drop trigger if exists transactions_validate_recurrence_source on public.transactions;
 create trigger transactions_validate_recurrence_source
@@ -63,9 +63,43 @@ begin
 end;
 $$;
 
-revoke all on function public.prevent_category_type_change_when_used() from public;
+revoke all on function public.prevent_category_type_change_when_used() from public, anon, authenticated;
 
 drop trigger if exists categories_prevent_type_change_when_used on public.categories;
 create trigger categories_prevent_type_change_when_used
 before update on public.categories
 for each row execute function public.prevent_category_type_change_when_used();
+
+-- Final launch hardening. These SECURITY DEFINER helpers are internal only and
+-- must never be callable as public RPC endpoints from browser roles.
+create or replace function public.current_entitlement(p_user uuid)
+returns text
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  p public.profiles%rowtype;
+begin
+  if auth.uid() is not null and auth.uid() <> p_user then
+    return 'none';
+  end if;
+
+  select * into p from public.profiles where id = p_user;
+  if not found then return 'none'; end if;
+
+  if p.subscription_status = 'active' then return p.plan; end if;
+  if p.subscription_status = 'trialing' and p.trial_ends_at > now() then return 'pro'; end if;
+  return 'none';
+end;
+$$;
+
+revoke all on function public.current_entitlement(uuid) from public, anon, authenticated;
+revoke all on function public.enforce_financial_write() from public, anon, authenticated;
+revoke all on function public.handle_new_user() from public, anon, authenticated;
+
+-- Webhook event ids are server-only idempotency records. No browser policy is
+-- intentionally created for this table.
+alter table public.webhook_events enable row level security;
+revoke all on public.webhook_events from anon, authenticated;
