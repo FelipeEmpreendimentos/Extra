@@ -50,6 +50,7 @@ jobs:
           test -f salesboard/netlify/functions/create-billing-portal.js
           test -f salesboard/netlify/functions/stripe-webhook.js
           test -f salesboard/netlify/functions/delete-account.js
+          test -f salesboard/netlify/functions/health.js
           test -f salesboard/netlify.toml
           test -f salesboard/.env.example
 
@@ -64,41 +65,43 @@ jobs:
           node --check salesboard/netlify/functions/create-billing-portal.js
           node --check salesboard/netlify/functions/stripe-webhook.js
           node --check salesboard/netlify/functions/delete-account.js
+          node --check salesboard/netlify/functions/health.js
 
       - name: Check production security invariants
         run: |
-          grep -q "enable row level security" salesboard/supabase/schema.sql
-          grep -q "current_entitlement" salesboard/supabase/schema.sql
-          grep -q "validate_transaction_references" salesboard/supabase/002_integrity.sql
-          grep -q "constructEvent" salesboard/netlify/functions/stripe-webhook.js
-          grep -q "verifyUser" salesboard/netlify/functions/create-checkout-session.js
-          grep -q "SUPABASE_SECRET_KEY" salesboard/netlify/functions/_shared.js
-          grep -q "STRIPE_PRICE_PRO_MONTHLY" salesboard/netlify/functions/create-checkout-session.js
-          grep -q "Content-Security-Policy" salesboard/netlify.toml
-          if grep -q "localStorage" salesboard/app/app.js; then
-            echo "Production app must not use localStorage as a financial database"
+          grep -Fq 'enable row level security' salesboard/supabase/schema.sql
+          grep -Fq 'current_entitlement' salesboard/supabase/schema.sql
+          grep -Fq 'validate_transaction_references' salesboard/supabase/002_integrity.sql
+          grep -Fq 'constructEvent' salesboard/netlify/functions/stripe-webhook.js
+          grep -Fq 'verifyUser' salesboard/netlify/functions/create-checkout-session.js
+          grep -Fq 'SUPABASE_SECRET_KEY' salesboard/netlify/functions/_shared.js
+          grep -Fq 'STRIPE_PRICE_PRO_MONTHLY' salesboard/netlify/functions/create-checkout-session.js
+          grep -Fq 'Content-Security-Policy' salesboard/netlify.toml
+          grep -Fq '/api/health' salesboard/netlify.toml
+          if grep -Fq 'localStorage' salesboard/app/app.js; then
+            echo 'Production app must not use localStorage as a financial database'
             exit 1
           fi
-          if grep -qE "sk_(live|test)_[A-Za-z0-9]{12,}" salesboard --exclude=.env.example -R; then
-            echo "Possible Stripe secret committed"
+          if grep -qE 'sk_(live|test)_[A-Za-z0-9]{12,}' salesboard --exclude=.env.example -R; then
+            echo 'Possible Stripe secret committed'
             exit 1
           fi
 
       - name: Check launch transparency and legal flows
         run: |
-          grep -q "7 dias grátis" salesboard/index.html
-          grep -q "R$14,90" salesboard/index.html
-          grep -q "R$24,90" salesboard/index.html
-          grep -q "legal/privacidade.html" salesboard/index.html
-          grep -q "legal/termos.html" salesboard/index.html
-          grep -q "data-netlify=\"true\"" salesboard/contato.html
-          grep -q "Excluir minha conta" salesboard/app/index.html
-          grep -q "Gerenciar cobrança" salesboard/app/index.html
-          if grep -q "Marina Costa\|Rafael Lima\|Ana Souza" salesboard/index.html; then
-            echo "Fictitious testimonials must not appear as launch social proof"
+          grep -Fq '7 dias grátis' salesboard/index.html
+          grep -Fq 'R$14,90' salesboard/index.html
+          grep -Fq 'R$24,90' salesboard/index.html
+          grep -Fq 'legal/privacidade.html' salesboard/index.html
+          grep -Fq 'legal/termos.html' salesboard/index.html
+          grep -Fq 'data-netlify="true"' salesboard/contato.html
+          grep -Fq 'Excluir minha conta' salesboard/app/index.html
+          grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
+          if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then
+            echo 'Fictitious testimonials must not appear as launch social proof'
             exit 1
           fi
-          if grep -q "Negócios" salesboard/index.html; then
-            echo "Unreleased Negocios plan must not be advertised"
+          if grep -Fq 'Negócios' salesboard/index.html; then
+            echo 'Unreleased Negocios plan must not be advertised'
             exit 1
           fi
