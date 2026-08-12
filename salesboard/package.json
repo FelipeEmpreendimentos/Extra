@@ -1,20 +1,17 @@
 {
   "name": "salesboard-finance",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
-  "description": "SaaS de controle financeiro com Supabase Auth/Postgres, Stripe Billing e Netlify Functions.",
+  "description": "SaaS de controle financeiro com GitHub Pages, Supabase Auth/Postgres/Edge Functions e Stripe Billing.",
   "engines": {
     "node": ">=24 <25"
   },
   "scripts": {
-    "dev": "netlify dev",
-    "check": "node --check app.js && node --check app/app.js && node --check legal/legal.js && node --check netlify/functions/_shared.js && node --check netlify/functions/public-config.js && node --check netlify/functions/create-checkout-session.js && node --check netlify/functions/create-billing-portal.js && node --check netlify/functions/stripe-webhook.js && node --check netlify/functions/delete-account.js && node --check netlify/functions/health.js && node --check netlify/functions/process-recurring.mjs"
+    "dev": "python3 -m http.server 8888 --directory .",
+    "check": "node --check app.js && node --check app/app.js && node --check app/runtime-bridge.js && node --check legal/legal.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.111.0",
     "stripe": "18.5.0"
-  },
-  "devDependencies": {
-    "netlify-cli": "27.0.1"
   }
 }
