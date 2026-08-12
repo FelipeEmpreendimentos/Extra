@@ -6,6 +6,15 @@ on:
     paths:
       - ".github/workflows/salesboard-responsive-audit-temp.yml"
       - "salesboard/scripts/responsive_audit.mjs"
+      - "salesboard/index.html"
+      - "salesboard/styles.css"
+      - "salesboard/launch.css"
+      - "salesboard/quality.css"
+      - "salesboard/app/index.html"
+      - "salesboard/app/app.css"
+      - "salesboard/app/quality.css"
+      - "salesboard/app/app.js"
+      - "salesboard/app/runtime-bridge.js"
   workflow_dispatch:
 
 permissions:
@@ -23,7 +32,7 @@ jobs:
       - name: Install browser audit dependency
         working-directory: salesboard
         run: |
-          npm install --no-save playwright
+          npm install --no-save --ignore-scripts --no-fund --no-audit playwright
           npx playwright install --with-deps chromium
       - name: Start static server
         run: |
