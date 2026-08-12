@@ -55,7 +55,7 @@ begin
   if auth.uid() is null then return false; end if;
   select email into user_email from auth.users where id = auth.uid();
   if user_email is null or trim(user_email) = '' then return false; end if;
-  fingerprint := encode(digest(lower(trim(user_email)), 'sha256'), 'hex');
+  fingerprint := encode(extensions.digest(lower(trim(user_email)), 'sha256'), 'hex');
   return not exists (select 1 from public.trial_claims where email_fingerprint = fingerprint);
 end;
 $$;
@@ -92,7 +92,7 @@ begin
     return result_profile;
   end if;
 
-  fingerprint := encode(digest(lower(trim(user_email)), 'sha256'), 'hex');
+  fingerprint := encode(extensions.digest(lower(trim(user_email)), 'sha256'), 'hex');
   insert into public.trial_claims (email_fingerprint, first_claimed_at, claimed_plan)
   values (fingerprint, now(), normalized_plan)
   on conflict (email_fingerprint) do nothing
