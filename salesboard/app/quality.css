@@ -63,3 +63,7 @@ canvas{max-width:100%!important}
   .report-actions{grid-template-columns:1fr}
   .report-actions .button{width:100%}
 }
+
+
+.goal-source-note{font-size:11px;color:#7d8998;text-align:right;line-height:1.3}
+#tx-goal-amount-wrap[hidden]{display:none!important}

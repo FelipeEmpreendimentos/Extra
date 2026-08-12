@@ -178,8 +178,8 @@
 
   function goalProgress(goal) {
     const base = Math.max(0, Number(goal?.current_amount || 0));
-    const linked = paidTransactions().filter((row) => row.type === 'income' && row.goal_id === goal?.id).reduce((sum, row) => sum + Number(row.amount), 0);
-    return Math.min(Number(goal?.target_amount || 0), base + linked);
+    const linked = paidTransactions().filter((row) => row.type === 'income' && row.goal_id === goal?.id).reduce((sum, row) => sum + Number(row.goal_amount || row.amount), 0);
+    return base + linked;
   }
 
   function paidTransactions() {
@@ -233,6 +233,7 @@
     if (message.includes('TRIAL_ALREADY_STARTED')) return 'Seu período de experiência já foi iniciado em outro plano e não pode ser reiniciado.';
     if (message.includes('INVALID_TRIAL_PLAN')) return 'Não foi possível identificar o plano escolhido. Atualize a página e tente novamente.';
     if (message.includes('duplicate key') || error?.code === '23505') return 'Já existe um item com essas informações.';
+    if (message.includes('INVALID_GOAL_AMOUNT')) return 'O valor destinado à meta precisa ser maior que zero e não pode ultrapassar o valor da entrada.';
     if (message.includes('GOAL_REQUIRES_INCOME')) return 'Metas podem ser vinculadas apenas a entradas. Para dinheiro que você já tinha guardado, use o valor já acumulado da meta.';
     if (message.includes('INVALID_GOAL_REFERENCE')) return 'A meta vinculada não existe mais ou não pertence a esta conta.';
     if (message.includes('CATEGORY_TYPE_MISMATCH')) return 'A categoria escolhida não combina com o tipo do lançamento.';
@@ -642,7 +643,7 @@
       const category = categoryById(row.category_id);
       const account = accountById(row.account_id);
       const goal = row.goal_id ? goalById(row.goal_id) : null;
-      const details = [row.recurring ? 'Recorrente' : '', goal ? `Meta: ${goal.icon} ${goal.name}` : ''].filter(Boolean).join(' · ');
+      const details = [row.recurring ? 'Recorrente' : '', goal ? `Meta: ${goal.icon} ${goal.name} (${brl.format(Number(row.goal_amount || row.amount))})` : ''].filter(Boolean).join(' · ');
       return `<tr><td><strong>${escapeHTML(row.description)}</strong>${details ? `<br><small>${escapeHTML(details)}</small>` : ''}</td><td><span class="category-pill">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</span></td><td>${escapeHTML(account.name)}</td><td>${dateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</td><td><span class="status-pill ${row.status === 'pending' ? 'pending' : ''}">${row.status === 'pending' ? 'Pendente' : 'Pago'}</span></td><td class="right ${row.type === 'income' ? 'value-income' : 'value-expense'}"><strong>${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</strong></td><td><div class="table-actions"><button class="row-button" data-edit-transaction="${row.id}" title="Editar">✎</button><button class="row-button" data-delete-transaction="${row.id}" title="Excluir">×</button></div></td></tr>`;
     }).join('');
     $$('[data-edit-transaction]').forEach((button) => button.addEventListener('click', () => openTransactionModal(button.dataset.editTransaction)));
@@ -680,13 +681,16 @@
     const rows = state.categories.filter((category) => category.type === 'expense' && Number(category.budget) > 0);
     const budgetTotal = rows.reduce((sum, category) => sum + Number(category.budget), 0);
     const spentTotal = rows.reduce((sum, category) => sum + categorySpent(category.id), 0);
-    $('#budget-summary').innerHTML = `<article><span>Limite planejado</span><strong>${brl.format(budgetTotal)}</strong></article><article><span>Gasto até agora</span><strong>${brl.format(spentTotal)}</strong></article><article><span>Disponível</span><strong>${brl.format(Math.max(0, budgetTotal - spentTotal))}</strong></article>`;
+    const budgetRoom = budgetTotal - spentTotal;
+    $('#budget-summary').innerHTML = `<article><span>Limite planejado</span><strong>${brl.format(budgetTotal)}</strong></article><article><span>Gasto até agora</span><strong>${brl.format(spentTotal)}</strong></article><article><span>${budgetRoom >= 0 ? 'Disponível' : 'Acima do limite'}</span><strong class="${budgetRoom < 0 ? 'value-expense' : ''}">${brl.format(Math.abs(budgetRoom))}</strong></article>`;
     $('#budgets-grid').innerHTML = rows.length ? rows.map((category) => {
       const spent = categorySpent(category.id);
       const budget = Number(category.budget);
-      const percent = Math.min(100, spent / budget * 100);
+      const percent = spent / budget * 100;
+      const barPercent = Math.min(100, percent);
       const cls = percent >= 95 ? 'danger' : percent >= 75 ? 'warning' : '';
-      return `<article class="entity-card budget-card"><div class="entity-head"><div class="entity-title"><span class="entity-icon">${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>Limite mensal</small></div></div><button class="entity-menu" data-edit-category="${category.id}">✎</button></div><div class="budget-values"><strong>${brl.format(spent)}</strong><span>de ${brl.format(budget)}</span></div><div class="progress"><i class="${cls}" style="width:${percent}%"></i></div><small>${Math.round(percent)}% utilizado · ${brl.format(Math.max(0, budget - spent))} restante</small></article>`;
+      const room = budget - spent;
+      return `<article class="entity-card budget-card"><div class="entity-head"><div class="entity-title"><span class="entity-icon">${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>Limite mensal</small></div></div><button class="entity-menu" data-edit-category="${category.id}">✎</button></div><div class="budget-values"><strong>${brl.format(spent)}</strong><span>de ${brl.format(budget)}</span></div><div class="progress"><i class="${cls}" style="width:${barPercent}%"></i></div><small>${Math.round(percent)}% utilizado · ${room >= 0 ? `${brl.format(room)} restante` : `${brl.format(Math.abs(room))} acima do limite`}</small></article>`;
     }).join('') : emptyState('◉', 'Nenhum orçamento', 'Defina um limite em uma categoria de saída.');
     $$('#budgets-grid [data-edit-category]').forEach((button) => button.addEventListener('click', () => openEntityModal('category', button.dataset.editCategory)));
   }
@@ -701,12 +705,11 @@
       const target = Number(goal.target_amount);
       const current = goalProgress(goal);
       const percent = target ? Math.min(100, current / target * 100) : 0;
-      const linkedCount = paidTransactions().filter((row) => row.goal_id === goal.id).length;
-      return `<article class="entity-card goal-card"><div class="goal-top"><span class="goal-icon">${escapeHTML(goal.icon)}</span><div><button class="entity-menu" data-edit-goal="${goal.id}">✎</button><button class="entity-menu" data-delete-goal-row="${goal.id}">×</button></div></div><h3>${escapeHTML(goal.name)}</h3><p>${goal.due_date ? `Prazo: ${dateBR.format(new Date(`${goal.due_date}T12:00:00`))}` : 'Sem prazo definido'}</p><div class="goal-values"><strong>${brl.format(current)}</strong><span>${Math.round(percent)}%</span></div><div class="progress"><i style="width:${percent}%;background:#4f7de8"></i></div><footer><small>Faltam ${brl.format(Math.max(0, target - current))}${linkedCount ? ` · ${linkedCount} ${linkedCount === 1 ? 'lançamento vinculado' : 'lançamentos vinculados'}` : ''}</small><button data-contribute-goal="${goal.id}">+ Aportar</button></footer></article>`;
+      const linkedCount = paidTransactions().filter((row) => row.type === 'income' && row.goal_id === goal.id).length;
+      return `<article class="entity-card goal-card"><div class="goal-top"><span class="goal-icon">${escapeHTML(goal.icon)}</span><div><button class="entity-menu" data-edit-goal="${goal.id}">✎</button><button class="entity-menu" data-delete-goal-row="${goal.id}">×</button></div></div><h3>${escapeHTML(goal.name)}</h3><p>${goal.due_date ? `Prazo: ${dateBR.format(new Date(`${goal.due_date}T12:00:00`))}` : 'Sem prazo definido'}</p><div class="goal-values"><strong>${brl.format(current)}</strong><span>${Math.round(percent)}%</span></div><div class="progress"><i style="width:${percent}%;background:#4f7de8"></i></div><footer><small>Faltam ${brl.format(Math.max(0, target - current))}${linkedCount ? ` · ${linkedCount} ${linkedCount === 1 ? 'entrada vinculada' : 'entradas vinculadas'}` : ''}</small><span class="goal-source-note">Vincule entradas em Novo lançamento</span></footer></article>`;
     }).join('') : emptyState('◎', 'Nenhuma meta ainda', 'Crie uma meta e vincule lançamentos para acompanhar o progresso.');
     $$('[data-edit-goal]').forEach((button) => button.addEventListener('click', () => openEntityModal('goal', button.dataset.editGoal)));
     $$('[data-delete-goal-row]').forEach((button) => button.addEventListener('click', () => deleteEntity('goal', button.dataset.deleteGoalRow)));
-    $$('[data-contribute-goal]').forEach((button) => button.addEventListener('click', () => contributeGoal(button.dataset.contributeGoal)));
   }
 
   function renderReports() {
@@ -814,7 +817,8 @@
 
     $('#report-budget-analysis').innerHTML = budgetRows.slice(0, 7).map((category) => {
       const percent = category.limit ? category.spent / category.limit * 100 : 0;
-      return `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${percent.toFixed(1).replace('.', ',')}% do limite · ${brl.format(Math.max(0, category.limit - category.spent))} disponível</small></div><b class="${percent > 100 ? 'value-expense' : ''}">${brl.format(category.spent)}</b></div>`;
+      const room = category.limit - category.spent;
+      return `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${percent.toFixed(1).replace('.', ',')}% do limite · ${room >= 0 ? `${brl.format(room)} disponível` : `${brl.format(Math.abs(room))} acima`}</small></div><b class="${percent > 100 ? 'value-expense' : ''}">${brl.format(category.spent)}</b></div>`;
     }).join('') || emptyState('◉', 'Sem limites', 'Defina orçamentos para medir eficiência.');
 
     const biggestCategory = expenses[0];
@@ -867,12 +871,40 @@
 
     const headline = state.profile?.subscription_status === 'active' ? activePlan : state.profile?.subscription_status === 'trialing' ? `Experiência ${activePlan}` : 'Sem plano ativo';
     const currentLabel = state.profile?.subscription_status === 'active' ? activePlan : state.profile?.subscription_status === 'trialing' ? activePlan : '—';
-    $('#current-plan').innerHTML = `<div><span>${escapeHTML(statusText.toUpperCase())}</span><h2>${escapeHTML(headline)}</h2><p>${state.subscription?.cancel_at_period_end ? 'Cancelamento agendado para o fim do período.' : state.profile?.subscription_status === 'trialing' ? `Seu acesso atual segue exatamente as permissões do ${activePlan}.` : 'Você pode gerenciar cobrança e cancelamento no portal seguro.'}</p></div><div><small>Plano atual</small><strong>${escapeHTML(currentLabel)}</strong></div>`;
+    const subscriptionStatus = state.profile?.subscription_status || 'none';
+    const planMessage = state.subscription?.cancel_at_period_end
+      ? 'Cancelamento agendado para o fim do período.'
+      : subscriptionStatus === 'trialing'
+        ? `Seu acesso atual segue exatamente as permissões do ${activePlan}.`
+        : subscriptionStatus === 'active'
+          ? 'Use o portal de cobrança para alterar plano, pagamento ou renovação.'
+          : subscriptionStatus === 'past_due'
+            ? 'Atualize o pagamento pelo portal de cobrança para regularizar o acesso.'
+            : subscriptionStatus === 'canceled'
+              ? 'A assinatura anterior foi encerrada. Você pode escolher um novo plano abaixo.'
+              : 'Escolha um plano abaixo quando quiser continuar após o período de experiência.';
+    $('#current-plan').innerHTML = `<div><span>${escapeHTML(statusText.toUpperCase())}</span><h2>${escapeHTML(headline)}</h2><p>${escapeHTML(planMessage)}</p></div><div><small>Plano atual</small><strong>${escapeHTML(currentLabel)}</strong></div>`;
+    const portalAvailable = Boolean(state.subscription?.stripe_subscription_id);
+    $('#billing-portal').hidden = !portalAvailable;
+    const mustUsePortal = ['active', 'past_due'].includes(subscriptionStatus);
+    $$('[data-subscribe]').forEach((button) => {
+      if (!button.dataset.defaultLabel) button.dataset.defaultLabel = button.textContent;
+      button.textContent = mustUsePortal ? 'Alterar no portal' : button.dataset.defaultLabel;
+    });
     $$('[data-billing-cycle]').forEach((button) => button.classList.toggle('active', button.dataset.billingCycle === billingCycle));
     $$('[data-price-monthly][data-price-annual]').forEach((price) => {
       const text = price.dataset[`price${billingCycle[0].toUpperCase()}${billingCycle.slice(1)}`];
       price.innerHTML = billingCycle === 'monthly' ? `${escapeHTML(text)}<small>/mês</small>` : escapeHTML(text);
     });
+  }
+
+  function syncGoalAllocationField() {
+    const wrap = $('#tx-goal-amount-wrap');
+    const input = $('#tx-goal-amount');
+    const selectedType = $('input[name="transaction_type"]:checked')?.value || 'expense';
+    const visible = hasPro() && selectedType === 'income' && Boolean($('#tx-goal')?.value);
+    if (wrap) wrap.hidden = !visible;
+    if (!visible && input) input.value = '';
   }
 
   function renderSelectOptions(type = null) {
@@ -887,12 +919,13 @@
       goalSelect.innerHTML = `<option value="">Nenhuma meta</option>${state.goals.map((goal) => `<option value="${goal.id}">${escapeHTML(goal.icon)} ${escapeHTML(goal.name)}</option>`).join('')}`;
       if (!canLinkGoal) goalSelect.value = '';
     }
+    syncGoalAllocationField();
   }
 
   function renderFeatureLocks() {
     $$('[data-pro-feature]').forEach((button) => button.classList.toggle('locked', !hasPro()));
     $('#tx-recurring').disabled = !hasPro();
-    if ($('#tx-goal-wrap')) $('#tx-goal-wrap').hidden = !hasPro();
+    syncGoalAllocationField();
   }
 
   function emptyState(icon, title, text) {
@@ -945,6 +978,8 @@
     $('#tx-category').value = row?.category_id || $('#tx-category').options[0]?.value || '';
     $('#tx-account').value = row?.account_id || $('#tx-account').options[0]?.value || '';
     $('#tx-goal').value = row?.goal_id || transactionGoalPreset || '';
+    $('#tx-goal-amount').value = row?.goal_amount ? Number(row.goal_amount).toFixed(2).replace('.', ',') : '';
+    syncGoalAllocationField();
     transactionGoalPreset = null;
     $('#tx-status').value = row?.status || 'paid';
     $('#tx-recurring').checked = Boolean(row?.recurring);
@@ -961,21 +996,28 @@
     setButtonLoading(button, true, 'Salvando...');
     try {
       const type = $('input[name="transaction_type"]:checked').value;
+      const amount = parseMoney($('#tx-amount').value);
+      const goalId = hasPro() && type === 'income' ? ($('#tx-goal').value || null) : null;
+      const allocationInput = $('#tx-goal-amount').value.trim();
+      const goalAmount = goalId ? (allocationInput ? parseMoney(allocationInput) : amount) : null;
       const payload = {
         user_id: state.user.id,
         type,
         description: $('#tx-description').value.trim(),
-        amount: parseMoney($('#tx-amount').value),
+        amount,
         transaction_date: $('#tx-date').value,
         category_id: $('#tx-category').value,
         account_id: $('#tx-account').value,
-        goal_id: hasPro() && type === 'income' ? ($('#tx-goal').value || null) : null,
+        goal_id: goalId,
+        goal_amount: goalAmount,
         status: $('#tx-status').value,
         recurring: $('#tx-recurring').checked,
         recurrence_interval: $('#tx-recurring').checked ? $('#tx-recurrence').value : null,
         notes: $('#tx-notes').value.trim() || null
       };
       if (!payload.description || payload.amount <= 0) throw new Error('Preencha descrição e valor corretamente.');
+      if (!payload.category_id) throw new Error('Crie ou selecione uma categoria compatível com este lançamento.');
+      if (payload.goal_amount != null && (payload.goal_amount <= 0 || payload.goal_amount > payload.amount)) throw new Error('INVALID_GOAL_AMOUNT');
       if (payload.recurring && !hasPro()) throw new Error('PLAN_REQUIRED_PRO');
       if (demoMode) {
         if (editingTransactionId) Object.assign(state.transactions.find((item) => item.id === editingTransactionId), payload);
@@ -1124,27 +1166,9 @@
     }
   }
 
-  async function contributeGoal(id) {
-    const goal = state.goals.find((item) => item.id === id);
-    if (!goal) return;
-    transactionGoalPreset = id;
-    openTransactionModal();
-    if ($('#transaction-modal').hidden) {
-      transactionGoalPreset = null;
-      return;
-    }
-    const incomeRadio = $('input[name="transaction_type"][value="income"]');
-    if (incomeRadio) incomeRadio.checked = true;
-    renderSelectOptions('income');
-    $('#tx-description').value = `Entrada para ${goal.name}`;
-    $('#tx-goal').value = id;
-    setTimeout(() => $('#tx-amount')?.focus(), 50);
-    toast('Meta vinculada à entrada', 'O progresso aumenta quando esta entrada estiver marcada como recebida. Dinheiro que você já tinha guardado deve entrar em “Valor já acumulado” da meta.');
-  }
-
   function exportCSV(monthFilter = null) {
     const source = monthFilter ? state.transactions.filter((row) => monthKey(row.transaction_date) === monthFilter) : state.transactions;
-    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
+    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Valor na meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.goal_id ? Number(row.goal_amount || row.amount).toFixed(2).replace('.', ',') : '', row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
     const csv = '\uFEFF' + rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -1557,6 +1581,7 @@
     $$('#transaction-filters [data-filter]').forEach((button) => button.addEventListener('click', () => { transactionFilter = button.dataset.filter; $$('#transaction-filters button').forEach((item) => item.classList.toggle('active', item === button)); renderTransactions(); }));
     $('#transaction-search').addEventListener('input', renderTransactions);
     $('#report-month').addEventListener('change', (event) => { reportMonthKey = event.target.value || currentMonthKey(); renderReports(); });
+    $('#tx-goal').addEventListener('change', syncGoalAllocationField);
     $('#export-csv').addEventListener('click', () => exportCSV());
     $('#reports-export').addEventListener('click', () => exportCSV(reportMonthKey));
     $('#settings-export').addEventListener('click', () => exportCSV());
@@ -1567,7 +1592,7 @@
     $('#delete-account').addEventListener('click', deleteAccountPermanently);
     $$('[data-start-trial]').forEach((button) => button.addEventListener('click', () => startTrial(button.dataset.startTrial, button)));
     $('#trial-plan-logout')?.addEventListener('click', logout);
-    $$('[data-subscribe]').forEach((button) => button.addEventListener('click', () => subscribe(button.dataset.subscribe)));
+    $$('[data-subscribe]').forEach((button) => button.addEventListener('click', () => ['active', 'past_due'].includes(state.profile?.subscription_status) ? openBillingPortal() : subscribe(button.dataset.subscribe)));
     $$('[data-paywall-plan]').forEach((button) => button.addEventListener('click', () => subscribe(button.dataset.paywallPlan)));
     $$('[data-billing-cycle]').forEach((button) => button.addEventListener('click', () => { billingCycle = button.dataset.billingCycle; renderBilling(); }));
     $('#billing-portal').addEventListener('click', openBillingPortal);
