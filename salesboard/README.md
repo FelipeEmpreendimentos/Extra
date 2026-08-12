@@ -35,6 +35,7 @@ A raiz `https://felipeempreendimentos.github.io/Extra/` redireciona para o Sales
 
 - landing comercial responsiva;
 - cadastro e login reais via Supabase Auth;
+- login com Google via Supabase Auth (frontend pronto; requer credenciais Google no provedor);
 - confirmação de e-mail e recuperação de senha;
 - onboarding;
 - dashboard financeiro;
@@ -44,9 +45,9 @@ A raiz `https://felipeempreendimentos.github.io/Extra/` redireciona para o Sales
 - orçamentos;
 - metas Pro;
 - lançamentos recorrentes Pro;
-- relatórios e insights;
+- relatórios essenciais no Essencial e relatórios avançados de 12 meses no Pro;
 - exportação CSV;
-- trial Pro de 7 dias sem cartão;
+- trial Pro de 3 dias sem cartão;
 - paywall após expiração;
 - limite de 3 contas no Essencial aplicado também no banco;
 - Stripe Checkout autenticado;

@@ -11,7 +11,7 @@ create table if not exists public.profiles (
   workspace_type text not null default 'personal' check (workspace_type in ('personal','freelancer','business')),
   plan text not null default 'pro' check (plan in ('essential','pro')),
   subscription_status text not null default 'trialing' check (subscription_status in ('trialing','active','past_due','canceled','none')),
-  trial_ends_at timestamptz not null default (now() + interval '7 days'),
+  trial_ends_at timestamptz not null default (now() + interval '3 days'),
   stripe_customer_id text unique,
   onboarded boolean not null default false,
   currency text not null default 'BRL',
@@ -142,27 +142,18 @@ declare
 begin
   requested_plan := lower(coalesce(new.raw_user_meta_data->>'selected_plan', 'pro'));
   if requested_plan not in ('essential','pro') then requested_plan := 'pro'; end if;
-
   begin
     accepted_at := nullif(new.raw_user_meta_data->>'terms_accepted_at','')::timestamptz;
-  exception when others then
-    accepted_at := null;
+  exception when others then accepted_at := null;
   end;
-
-  insert into public.profiles (
-    id, full_name, workspace_name, plan, terms_accepted_at, terms_version
-  ) values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'full_name',''),
-    coalesce(nullif(new.raw_user_meta_data->>'workspace_name',''),'Meu espaço'),
-    requested_plan,
-    accepted_at,
-    nullif(new.raw_user_meta_data->>'terms_version','')
-  ) on conflict (id) do nothing;
-
+  insert into public.profiles (id, full_name, workspace_name, plan, subscription_status, trial_ends_at, terms_accepted_at, terms_version)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name',''), coalesce(nullif(new.raw_user_meta_data->>'workspace_name',''),'Meu espaço'), requested_plan, 'trialing', new.created_at + interval '3 days', accepted_at, nullif(new.raw_user_meta_data->>'terms_version',''))
+  on conflict (id) do nothing;
   return new;
 end;
 $$;
+
+revoke all on function public.handle_new_user() from public, anon, authenticated;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -170,7 +161,7 @@ after insert on auth.users
 for each row execute function public.handle_new_user();
 
 -- Returns the plan that can currently write financial data.
--- Trial users receive Pro capabilities for seven days.
+-- Trial users receive Pro capabilities for three days from account creation.
 create or replace function public.current_entitlement(p_user uuid)
 returns text
 language plpgsql
@@ -211,31 +202,20 @@ declare
 begin
   target_user := new.user_id;
   entitlement := public.current_entitlement(target_user);
-
-  if entitlement = 'none' then
-    raise exception 'SUBSCRIPTION_REQUIRED' using errcode = 'P0001';
-  end if;
-
-  if tg_table_name = 'accounts' and tg_op = 'INSERT' and entitlement = 'essential' then
-    select count(*) into account_count from public.accounts where user_id = target_user and archived = false;
-    if account_count >= 3 then
-      raise exception 'PLAN_LIMIT_ACCOUNTS' using errcode = 'P0001';
+  if entitlement = 'none' then raise exception 'SUBSCRIPTION_REQUIRED' using errcode = 'P0001'; end if;
+  if tg_table_name = 'accounts' and entitlement = 'essential' and new.archived = false then
+    if tg_op = 'INSERT' or (tg_op = 'UPDATE' and old.archived = true) then
+      select count(*) into account_count from public.accounts where user_id = target_user and archived = false;
+      if account_count >= 3 then raise exception 'PLAN_LIMIT_ACCOUNTS' using errcode = 'P0001'; end if;
     end if;
   end if;
-
-  if tg_table_name = 'goals' and entitlement = 'essential' then
-    raise exception 'PLAN_REQUIRED_PRO' using errcode = 'P0001';
-  end if;
-
-  if tg_table_name = 'transactions' and coalesce(new.recurring,false) and entitlement = 'essential' then
-    raise exception 'PLAN_REQUIRED_PRO' using errcode = 'P0001';
-  end if;
-
+  if tg_table_name = 'goals' and entitlement = 'essential' then raise exception 'PLAN_REQUIRED_PRO' using errcode = 'P0001'; end if;
+  if tg_table_name = 'transactions' and coalesce(new.recurring,false) and entitlement = 'essential' then raise exception 'PLAN_REQUIRED_PRO' using errcode = 'P0001'; end if;
   return new;
 end;
 $$;
 
-revoke all on function public.enforce_financial_write() from public;
+revoke all on function public.enforce_financial_write() from public, anon, authenticated;
 
 drop trigger if exists accounts_require_access on public.accounts;
 create trigger accounts_require_access before insert or update on public.accounts for each row execute function public.enforce_financial_write();

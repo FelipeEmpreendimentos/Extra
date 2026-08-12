@@ -307,9 +307,9 @@
 
   function initDemo() {
     const now = new Date();
-    const trialEnd = new Date(now.getTime() + 7 * 86400000).toISOString();
+    const trialEnd = new Date(now.getTime() + 3 * 86400000).toISOString();
     state.user = { id: 'demo-user', email: 'demo@salesboard.finance' };
-    state.profile = { id: 'demo-user', full_name: 'Conta demonstração', workspace_name: 'Meu espaço financeiro', workspace_type: 'personal', plan: 'pro', subscription_status: 'trialing', trial_ends_at: trialEnd, onboarded: true, currency: 'BRL' };
+    state.profile = { id: 'demo-user', full_name: 'Conta demonstração', workspace_name: 'Demonstração Pro', workspace_type: 'business', plan: 'pro', subscription_status: 'active', trial_ends_at: trialEnd, onboarded: true, currency: 'BRL', terms_accepted_at: new Date().toISOString() };
     state.accounts = [
       { id: 'a1', name: 'Conta principal', type: 'bank', opening_balance: 5200, icon: '◈', color: '#8b5cf6' },
       { id: 'a2', name: 'Carteira digital', type: 'wallet', opening_balance: 1350, icon: '◆', color: '#34d399' },
@@ -333,7 +333,7 @@
       { id: 't6', description: 'Ferramentas online', type: 'expense', amount: 174.9, transaction_date: demoDate(7), status: 'paid', recurring: true, recurrence_interval: 'monthly', account_id: 'a1', category_id: 'c6' },
       { id: 't7', description: 'Restaurante', type: 'expense', amount: 162.8, transaction_date: demoDate(8), status: 'paid', recurring: false, account_id: 'a2', category_id: 'c4' }
     ];
-    for (let monthOffset = 1; monthOffset <= 5; monthOffset += 1) {
+    for (let monthOffset = 1; monthOffset <= 11; monthOffset += 1) {
       const date = new Date(now.getFullYear(), now.getMonth() - monthOffset, 12);
       state.transactions.push({ id: `hist-in-${monthOffset}`, description: 'Receitas do período', type: 'income', amount: 5800 + monthOffset * 420, transaction_date: isoDate(date), status: 'paid', recurring: false, account_id: 'a1', category_id: 'c1' });
       state.transactions.push({ id: `hist-out-${monthOffset}`, description: 'Despesas do período', type: 'expense', amount: 3300 + monthOffset * 160, transaction_date: isoDate(new Date(date.getFullYear(), date.getMonth(), 18)), status: 'paid', recurring: false, account_id: 'a1', category_id: 'c3' });
@@ -342,7 +342,7 @@
       { id: 'g1', name: 'Reserva de emergência', icon: '🛡️', target_amount: 10000, current_amount: 7200, due_date: isoDate(new Date(now.getFullYear(), now.getMonth() + 5, 28)) },
       { id: 'g2', name: 'Notebook novo', icon: '💻', target_amount: 7000, current_amount: 3100, due_date: isoDate(new Date(now.getFullYear() + 1, 0, 31)) }
     ];
-    state.subscription = null;
+    state.subscription = { plan: 'pro', status: 'active', billing_cycle: 'annual', cancel_at_period_end: false, current_period_end: new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString() };
     enterApp();
     $('#demo-badge').hidden = false;
     toast('Modo demonstração', 'Os dados desta tela são fictícios e não são enviados para um servidor.');
@@ -550,39 +550,132 @@
 
   function renderReports() {
     const totals = totalsForMonth();
+    const now = new Date();
+    const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
+    const previous = totalsForMonth(previousKey);
+    const change = (current, before) => before ? ((current - before) / Math.abs(before)) * 100 : (current ? null : 0);
+    const deltaText = (current, before) => {
+      const delta = change(current, before);
+      if (delta === null) return 'sem base no mês anterior';
+      return `${delta >= 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')}% vs. mês anterior`;
+    };
+
     $('#report-summary').innerHTML = [
-      ['Receitas', brl.format(totals.income), 'good'],
-      ['Despesas', brl.format(totals.expense), 'bad'],
-      ['Resultado', brl.format(totals.net), totals.net >= 0 ? 'good' : 'bad'],
-      ['Taxa de economia', `${Math.max(0, totals.savingsRate).toFixed(1).replace('.', ',')}%`, 'good']
-    ].map(([label, value, cls]) => `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small class="${cls}">mês atual</small></article>`).join('');
+      ['Receitas', brl.format(totals.income), deltaText(totals.income, previous.income), 'good'],
+      ['Despesas', brl.format(totals.expense), deltaText(totals.expense, previous.expense), totals.expense <= previous.expense ? 'good' : 'bad'],
+      ['Resultado', brl.format(totals.net), deltaText(totals.net, previous.net), totals.net >= 0 ? 'good' : 'bad'],
+      ['Taxa de economia', `${totals.savingsRate.toFixed(1).replace('.', ',')}%`, `${(totals.savingsRate - previous.savingsRate) >= 0 ? '+' : ''}${(totals.savingsRate - previous.savingsRate).toFixed(1).replace('.', ',')} p.p. vs. mês anterior`, totals.savingsRate >= 0 ? 'good' : 'bad']
+    ].map(([label, value, detail, cls]) => `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small class="${cls}">${escapeHTML(detail)}</small></article>`).join('');
 
     const expenses = state.categories.filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
-    $('#report-categories').innerHTML = expenses.slice(0, 7).map((category) => `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${totals.expense ? Math.round(category.total / totals.expense * 100) : 0}% das despesas</small></div><b>${brl.format(category.total)}</b></div>`).join('') || emptyState('⌁', 'Sem despesas', 'Registre saídas para gerar a análise.');
+    $('#report-categories').innerHTML = expenses.slice(0, 7).map((category) => `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${totals.expense ? (category.total / totals.expense * 100).toFixed(1).replace('.', ',') : 0}% das despesas</small></div><b>${brl.format(category.total)}</b></div>`).join('') || emptyState('⌁', 'Sem despesas', 'Registre saídas para gerar a análise.');
 
-    const biggest = expenses[0];
-    $('#insights-grid').innerHTML = [
-      ['↘', 'Relação gasto/receita', totals.income ? `As despesas representam ${(totals.expense / totals.income * 100).toFixed(1).replace('.', ',')}% das receitas do mês.` : 'Registre receitas para comparar o peso das despesas.'],
-      ['◎', 'Taxa de economia', totals.income ? `Sua taxa de economia está em ${Math.max(0, totals.savingsRate).toFixed(1).replace('.', ',')}%.` : 'Ainda não há receita no período para calcular a taxa de economia.'],
-      ['◈', 'Maior categoria', biggest ? `${biggest.name} concentra ${totals.expense ? Math.round(biggest.total / totals.expense * 100) : 0}% das despesas do mês.` : 'Nenhuma categoria de saída possui gastos neste mês.']
-    ].map(([icon, title, text]) => `<div class="insight"><span>${icon}</span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(text)}</p></div>`).join('');
-
-    if (!hasPro()) {
-      $('.insights-panel').hidden = true;
-    } else {
-      $('.insights-panel').hidden = false;
-    }
+    $('#report-pro-lock').hidden = hasPro();
+    $('#report-pro-details').hidden = !hasPro();
+    $('#report-pro-lock [data-view="billing"]')?.addEventListener('click', () => switchView('billing'));
     renderReportChart();
+    if (!hasPro()) {
+      charts.reportYear?.destroy();
+      charts.reportYear = null;
+      return;
+    }
+
+    const currentRows = monthTransactions();
+    const expenseRows = currentRows.filter((row) => row.type === 'expense');
+    const allRows = state.transactions;
+    const pendingIncomeRows = allRows.filter((row) => row.status === 'pending' && row.type === 'income');
+    const pendingExpenseRows = allRows.filter((row) => row.status === 'pending' && row.type === 'expense');
+    const pendingIncome = pendingIncomeRows.reduce((sum, row) => sum + Number(row.amount), 0);
+    const pendingExpense = pendingExpenseRows.reduce((sum, row) => sum + Number(row.amount), 0);
+    const recurring = allRows.filter((row) => row.recurring && !row.recurrence_source_id);
+    const recurringFactor = (row) => row.recurrence_interval === 'weekly' ? 52 / 12 : row.recurrence_interval === 'yearly' ? 1 / 12 : 1;
+    const recurringIncome = recurring.filter((row) => row.type === 'income').reduce((sum, row) => sum + Number(row.amount) * recurringFactor(row), 0);
+    const recurringExpense = recurring.filter((row) => row.type === 'expense').reduce((sum, row) => sum + Number(row.amount) * recurringFactor(row), 0);
+    const biggestExpense = expenseRows.slice().sort((a, b) => Number(b.amount) - Number(a.amount))[0];
+    const daysElapsed = Math.max(1, now.getDate());
+    const averageDailyExpense = totals.expense / daysElapsed;
+    const averageTicket = currentRows.length ? currentRows.reduce((sum, row) => sum + Number(row.amount), 0) / currentRows.length : 0;
+    const yearSeries = monthSeries(12);
+    const monthsWithExpense = yearSeries.filter((item) => item.expense > 0);
+    const lastExpenseMonths = monthsWithExpense.slice(-3);
+    const averageMonthlyExpense = lastExpenseMonths.length ? lastExpenseMonths.reduce((sum, item) => sum + item.expense, 0) / lastExpenseMonths.length : 0;
+    const runway = averageMonthlyExpense > 0 ? totalBalance() / averageMonthlyExpense : null;
+    const bestMonth = yearSeries.slice().sort((a, b) => b.net - a.net)[0];
+    const worstMonth = yearSeries.slice().sort((a, b) => a.net - b.net)[0];
+    const budgetRows = state.categories.filter((category) => category.type === 'expense' && Number(category.budget) > 0).map((category) => ({ ...category, spent: categorySpent(category.id), limit: Number(category.budget) })).sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit));
+
+    $('#report-comparison').innerHTML = [
+      ['Receita vs. mês anterior', brl.format(totals.income - previous.income), deltaText(totals.income, previous.income)],
+      ['Despesa vs. mês anterior', brl.format(totals.expense - previous.expense), deltaText(totals.expense, previous.expense)],
+      ['Variação do resultado', brl.format(totals.net - previous.net), deltaText(totals.net, previous.net)],
+      ['Saldo consolidado', brl.format(totalBalance()), runway === null ? 'sem base para estimativa' : `≈ ${runway.toFixed(1).replace('.', ',')} meses de despesas médias`]
+    ].map(([label, value, detail]) => `<article><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small></article>`).join('');
+
+    $('#report-health').innerHTML = [
+      ['Lançamentos realizados', String(currentRows.length), 'no mês atual'],
+      ['Ticket médio', brl.format(averageTicket), 'média por lançamento'],
+      ['Gasto médio diário', brl.format(averageDailyExpense), `em ${daysElapsed} dias do mês`],
+      ['Maior saída', biggestExpense ? brl.format(Number(biggestExpense.amount)) : brl.format(0), biggestExpense?.description || 'sem saídas'],
+      ['Melhor mês (12m)', brl.format(bestMonth?.net || 0), bestMonth?.label || '—'],
+      ['Pior mês (12m)', brl.format(worstMonth?.net || 0), worstMonth?.label || '—']
+    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${escapeHTML(label)}</span><small>${escapeHTML(detail)}</small></div><strong>${escapeHTML(value)}</strong></div>`).join('');
+
+    $('#report-pending').innerHTML = [
+      ['A receber', brl.format(pendingIncome), `${pendingIncomeRows.length} lançamentos`],
+      ['A pagar', brl.format(pendingExpense), `${pendingExpenseRows.length} lançamentos`],
+      ['Saldo pendente', brl.format(pendingIncome - pendingExpense), 'impacto líquido se tudo ocorrer']
+    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${label}</span><small>${detail}</small></div><strong>${value}</strong></div>`).join('');
+
+    $('#report-recurring').innerHTML = [
+      ['Entradas recorrentes', brl.format(recurringIncome), 'equivalência mensal'],
+      ['Saídas recorrentes', brl.format(recurringExpense), 'equivalência mensal'],
+      ['Resultado recorrente', brl.format(recurringIncome - recurringExpense), `${recurring.length} compromissos cadastrados`]
+    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${label}</span><small>${detail}</small></div><strong>${value}</strong></div>`).join('');
+
+    const balances = state.accounts.filter((account) => !account.archived).map((account) => ({ ...account, balance: accountBalance(account.id) })).sort((a, b) => b.balance - a.balance);
+    $('#report-accounts').innerHTML = balances.map((account) => `<div class="rank-row"><span>${escapeHTML(account.icon)}</span><div><strong>${escapeHTML(account.name)}</strong><small>${escapeHTML(accountTypeLabel(account.type))}</small></div><b>${brl.format(account.balance)}</b></div>`).join('') || emptyState('▣', 'Sem contas', 'Adicione uma conta para analisar a distribuição.');
+
+    $('#report-budget-analysis').innerHTML = budgetRows.slice(0, 7).map((category) => {
+      const percent = category.limit ? category.spent / category.limit * 100 : 0;
+      return `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${percent.toFixed(1).replace('.', ',')}% do limite · ${brl.format(Math.max(0, category.limit - category.spent))} disponível</small></div><b class="${percent > 100 ? 'value-expense' : ''}">${brl.format(category.spent)}</b></div>`;
+    }).join('') || emptyState('◉', 'Sem limites', 'Defina orçamentos para medir eficiência.');
+
+    const biggestCategory = expenses[0];
+    const budgetOver = budgetRows.filter((row) => row.spent > row.limit);
+    const insights = [
+      ['↘', 'Peso das despesas', totals.income ? `As saídas consomem ${(totals.expense / totals.income * 100).toFixed(1).replace('.', ',')}% das receitas deste mês.` : 'Não há receita suficiente no período para medir o peso das despesas.'],
+      ['◎', 'Taxa de economia', totals.income ? `Você preservou ${totals.savingsRate.toFixed(1).replace('.', ',')}% do que entrou. A comparação com o mês anterior é de ${(totals.savingsRate - previous.savingsRate).toFixed(1).replace('.', ',')} p.p.` : 'Registre receitas para calcular sua taxa de economia.'],
+      ['◈', 'Concentração de gastos', biggestCategory ? `${biggestCategory.name} representa ${(biggestCategory.total / Math.max(1, totals.expense) * 100).toFixed(1).replace('.', ',')}% das despesas do mês.` : 'Não há concentração de despesas calculável neste mês.'],
+      ['◇', 'Pendências', `Há ${brl.format(pendingIncome)} a receber e ${brl.format(pendingExpense)} a pagar em lançamentos pendentes.`],
+      ['↻', 'Base recorrente', `Seus compromissos recorrentes equivalem a ${brl.format(recurringExpense)} em saídas e ${brl.format(recurringIncome)} em entradas por mês.`],
+      ['!', 'Orçamentos', budgetOver.length ? `${budgetOver.length} ${budgetOver.length === 1 ? 'categoria ultrapassou' : 'categorias ultrapassaram'} o limite neste mês.` : 'Nenhum orçamento com limite definido foi ultrapassado neste mês.']
+    ];
+    $('#insights-grid').innerHTML = insights.map(([icon, title, body]) => `<div class="insight"><span>${icon}</span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(body)}</p></div>`).join('');
+    renderYearReportChart(yearSeries);
   }
 
   function renderReportChart() {
     if (!window.Chart) return;
-    const series = monthSeries();
+    const series = monthSeries(6);
     charts.report?.destroy();
     charts.report = new Chart($('#report-chart'), {
-      type: hasPro() ? 'line' : 'bar',
-      data: { labels: series.map((item) => item.label), datasets: [{ label: 'Resultado', data: series.map((item) => item.net), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.18)', fill: hasPro(), tension: .35, pointRadius: hasPro() ? 3 : 0, borderWidth: 2, borderRadius: 6, borderSkipped: false }] },
+      type: 'line',
+      data: { labels: series.map((item) => item.label), datasets: [{ label: 'Resultado', data: series.map((item) => item.net), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,.18)', fill: hasPro(), tension: .35, pointRadius: 3, borderWidth: 2 }] },
       options: { ...chartDefaults(), plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `Resultado: ${brl.format(context.raw)}` } } } }
+    });
+  }
+
+  function renderYearReportChart(series) {
+    if (!window.Chart || !$('#report-year-chart')) return;
+    charts.reportYear?.destroy();
+    charts.reportYear = new Chart($('#report-year-chart'), {
+      type: 'bar',
+      data: { labels: series.map((item) => item.label), datasets: [
+        { label: 'Entradas', data: series.map((item) => item.income), backgroundColor: 'rgba(52,211,153,.72)', borderRadius: 5 },
+        { label: 'Saídas', data: series.map((item) => item.expense), backgroundColor: 'rgba(230,91,103,.65)', borderRadius: 5 }
+      ] },
+      options: { ...chartDefaults(), plugins: { legend: { display: true, labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${brl.format(context.raw)}` } } } }
     });
   }
 
@@ -926,6 +1019,12 @@
 
   function setupOnboarding() {
     $('#workspace-name-input').value = state.profile?.workspace_name || 'Meu espaço';
+    const oauthTerms = $('#oauth-terms-wrap');
+    if (oauthTerms) {
+      oauthTerms.hidden = Boolean(state.profile?.terms_accepted_at);
+      const checkbox = $('#oauth-accept-terms');
+      if (checkbox) checkbox.checked = Boolean(state.profile?.terms_accepted_at);
+    }
     onboardingStep = 1;
     updateOnboardingStep();
   }
@@ -944,6 +1043,8 @@
     const button = $('#onboarding-finish');
     setButtonLoading(button, true, 'Criando seu espaço...');
     try {
+      const needsTerms = !state.profile?.terms_accepted_at;
+      if (needsTerms && !$('#oauth-accept-terms')?.checked) throw new Error('Aceite os Termos de Uso e a Política de Privacidade para continuar.');
       const workspaceType = $('input[name="workspace_type"]:checked').value;
       const workspaceName = $('#workspace-name-input').value.trim() || 'Meu espaço';
       const account = {
@@ -970,7 +1071,9 @@
       if (accountError) throw accountError;
       const { error: categoryError } = await supabaseClient.from('categories').insert(categories);
       if (categoryError) throw categoryError;
-      const { data: profile, error: profileError } = await supabaseClient.from('profiles').update({ workspace_type: workspaceType, workspace_name: workspaceName, onboarded: true }).eq('id', state.user.id).select().single();
+      const profilePayload = { workspace_type: workspaceType, workspace_name: workspaceName, onboarded: true };
+      if (!state.profile?.terms_accepted_at) { profilePayload.terms_accepted_at = new Date().toISOString(); profilePayload.terms_version = '2026-08-12'; }
+      const { data: profile, error: profileError } = await supabaseClient.from('profiles').update(profilePayload).eq('id', state.user.id).select().single();
       if (profileError) throw profileError;
       state.profile = profile;
       await loadFinancialData();
@@ -1063,7 +1166,27 @@
     $('#sidebar-overlay').classList.remove('open');
   }
 
+  async function signInWithGoogle() {
+    const button = $('#google-auth-button');
+    if (!supabaseClient) return;
+    setButtonLoading(button, true, 'Abrindo Google...');
+    setAuthMessage('');
+    try {
+      const redirectTo = `${location.origin}${location.pathname}?oauth=google`;
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo, queryParams: { prompt: 'select_account' } }
+      });
+      if (error) throw error;
+    } catch (error) {
+      setButtonLoading(button, false);
+      const message = String(error?.message || error || '');
+      setAuthMessage(message.toLowerCase().includes('provider') ? 'O login com Google ainda precisa ser ativado no Supabase Auth. Use e-mail e senha enquanto a configuração externa não estiver concluída.' : friendlyError(error), true);
+    }
+  }
+
   function initStaticEvents() {
+    $('#google-auth-button')?.addEventListener('click', signInWithGoogle);
     $$('[data-auth-mode]').forEach((button) => button.addEventListener('click', () => setAuthMode(button.dataset.authMode)));
     $$('[data-toggle-password]').forEach((button) => button.addEventListener('click', () => {
       const input = document.getElementById(button.dataset.togglePassword);
