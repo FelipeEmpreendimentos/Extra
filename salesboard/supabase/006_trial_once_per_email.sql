@@ -11,7 +11,7 @@ revoke all on table public.trial_claims from anon, authenticated;
 
 -- Existing users have already consumed their one-time trial eligibility.
 insert into public.trial_claims (email_fingerprint, first_claimed_at)
-select encode(digest(lower(trim(email)), 'sha256'), 'hex'), min(created_at)
+select encode(extensions.digest(lower(trim(email)), 'sha256'), 'hex'), min(created_at)
 from auth.users
 where email is not null and trim(email) <> ''
 group by 1
@@ -40,7 +40,7 @@ begin
   end;
 
   if new.email is not null and trim(new.email) <> '' then
-    fingerprint := encode(digest(lower(trim(new.email)), 'sha256'), 'hex');
+    fingerprint := encode(extensions.digest(lower(trim(new.email)), 'sha256'), 'hex');
     insert into public.trial_claims (email_fingerprint, first_claimed_at)
     values (fingerprint, new.created_at)
     on conflict (email_fingerprint) do nothing
