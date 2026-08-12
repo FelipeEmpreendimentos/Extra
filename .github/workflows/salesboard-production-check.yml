@@ -111,7 +111,7 @@ jobs:
           test ! -e .ci-dist/.env.example
           test ! -e .ci-dist/package.json
 
-      - name: Check launch transparency and product rules
+      - name: Check final product coherence
         run: |
           grep -Fq '3 dias grátis' salesboard/index.html
           if grep -Fq '7 dias grátis' salesboard/index.html; then echo 'Old 7-day trial copy must not remain on the landing page'; exit 1; fi
@@ -120,6 +120,7 @@ jobs:
           grep -Fq 'Até 3 contas ativas' salesboard/index.html
           grep -Fq 'Relatórios avançados de 12 meses' salesboard/index.html
           grep -Fq 'destine parte das suas entradas às metas' salesboard/index.html
+          grep -Fq 'cancele a renovação quando quiser' salesboard/index.html
           if grep -Fq 'registre aportes' salesboard/index.html; then echo 'Marketing must describe the real goal allocation flow'; exit 1; fi
           grep -Fq 'google-auth-button' salesboard/app/index.html
           grep -Fq "provider: 'google'" salesboard/app/app.js
