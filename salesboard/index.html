@@ -3,45 +3,195 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="SalesBoard - dashboard de vendas com assinatura mensal e valores personalizáveis." />
-  <title>SalesBoard • Dashboard de vendas</title>
+  <meta name="description" content="SalesBoard Finance — controle financeiro inteligente para pessoas, autônomos e pequenos negócios." />
+  <meta name="theme-color" content="#08111f" />
+  <title>SalesBoard Finance — controle financeiro sem complicação</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand"><span>S</span><div><strong id="brandName">SalesBoard</strong><small>Gestão comercial</small></div></div>
-      <nav class="nav">
-        <button class="nav-item active" data-view="dashboard">Dashboard</button>
-        <button class="nav-item" data-view="sales">Vendas</button>
-        <button class="nav-item" data-view="customers">Clientes</button>
-        <button class="nav-item" data-view="billing">Assinatura</button>
-        <button class="nav-item" data-view="settings">Configurações</button>
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+  <section id="marketing-site" class="marketing-site">
+    <header class="marketing-header" id="marketing-header">
+      <a class="brand" href="#inicio" aria-label="SalesBoard Finance - início">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>SalesBoard <b>Finance</b></span>
+      </a>
+      <nav class="marketing-nav" aria-label="Navegação principal">
+        <a href="#recursos">Recursos</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#planos">Planos</a>
+        <a href="#faq">Dúvidas</a>
       </nav>
-    </aside>
+      <div class="header-actions">
+        <button class="btn btn-ghost btn-sm" data-open-auth="login">Entrar</button>
+        <button class="btn btn-primary btn-sm" data-open-auth="register">Começar grátis <span>→</span></button>
+      </div>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </header>
+
+    <div class="mobile-menu" id="mobile-menu" hidden>
+      <a href="#recursos">Recursos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#planos">Planos</a>
+      <a href="#faq">Dúvidas</a>
+      <div class="mobile-menu-actions">
+        <button class="btn btn-ghost" data-open-auth="login">Entrar</button>
+        <button class="btn btn-primary" data-open-auth="register">Começar grátis</button>
+      </div>
+    </div>
+
     <main>
-      <header class="topbar"><div><p class="eyebrow">Resumo comercial</p><h1 id="pageTitle">Dashboard</h1></div><button class="primary" data-view-trigger="sales">Nova venda</button></header>
+      <section class="hero" id="inicio">
+        <div class="hero-glow hero-glow-a"></div>
+        <div class="hero-glow hero-glow-b"></div>
+        <div class="hero-content">
+          <div class="hero-badge"><span class="pulse-dot"></span> Finanças claras. Decisões melhores.</div>
+          <h1>Seu dinheiro, finalmente<br><span>sob controle.</span></h1>
+          <p>Organize entradas, saídas, contas, categorias, metas e fluxo de caixa em um sistema simples de usar e poderoso para decidir melhor.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" data-open-auth="register">Começar 7 dias grátis <span>→</span></button>
+            <button class="btn btn-outline btn-lg" id="view-demo-btn"><span class="play-icon">▶</span> Ver demonstração</button>
+          </div>
+          <div class="hero-proof">
+            <div class="avatars"><span>F</span><span>M</span><span>R</span><span>A</span></div>
+            <div><div class="stars">★★★★★</div><small>Feito para pessoas que querem clareza, não planilhas.</small></div>
+          </div>
+        </div>
 
-      <section class="view active" id="dashboard">
-        <div class="grid cards"><article><span>Faturamento pago</span><strong id="paidRevenue">R$ 0,00</strong></article><article><span>Vendas</span><strong id="salesCount">0</strong></article><article><span>Ticket médio</span><strong id="avgTicket">R$ 0,00</strong></article><article><span>Meta mensal</span><strong id="goalProgress">0%</strong></article></div>
-        <div class="panel"><div class="panel-head"><h2>Últimos 6 meses</h2><p id="goalLabel">Meta: R$ 0,00</p></div><canvas id="chart" height="120"></canvas></div>
-        <div class="panel"><div class="panel-head"><h2>Vendas recentes</h2><button class="ghost" id="exportCsv">Exportar CSV</button></div><div class="table-wrap"><table><thead><tr><th>Cliente</th><th>Produto</th><th>Valor</th><th>Data</th><th>Status</th><th></th></tr></thead><tbody id="recentSales"></tbody></table></div></div>
-      </section>
-
-      <section class="view" id="sales">
-        <div class="grid two">
-          <form class="panel form" id="saleForm"><h2>Cadastrar venda</h2><label>Cliente<input name="customer" required placeholder="Nome do cliente"></label><label>Produto/serviço<input name="product" required placeholder="Ex: Plano mensal"></label><label>Valor<input name="amount" type="number" min="1" step="0.01" required></label><label>Data<input name="date" type="date" required></label><label>Status<select name="status"><option>Pago</option><option>Pendente</option><option>Cancelado</option></select></label><button class="primary" type="submit">Salvar venda</button></form>
-          <div class="panel"><div class="panel-head"><h2>Todas as vendas</h2><input id="search" placeholder="Buscar cliente ou produto"></div><div id="allSales" class="list"></div></div>
+        <div class="hero-product-wrap" aria-label="Prévia do dashboard">
+          <div class="hero-product-shadow"></div>
+          <div class="hero-product-window">
+            <div class="mock-topbar">
+              <div class="mock-logo"><span class="brand-mark mini"><i></i><i></i><i></i></span></div>
+              <div class="mock-search">⌕&nbsp;&nbsp; Buscar lançamento...</div>
+              <div class="mock-user"><span></span></div>
+            </div>
+            <div class="mock-body">
+              <div class="mock-sidebar">
+                <i class="active"></i><i></i><i></i><i></i><i></i><i></i>
+              </div>
+              <div class="mock-content">
+                <div class="mock-heading"><div><small>Visão geral</small><strong>Olá, Felipe 👋</strong></div><button>+ Novo lançamento</button></div>
+                <div class="mock-kpis">
+                  <article><span>Saldo atual</span><strong>R$ 12.840,50</strong><small class="positive">↑ 8,4% este mês</small></article>
+                  <article><span>Entradas</span><strong>R$ 8.420,00</strong><small>12 lançamentos</small></article>
+                  <article><span>Saídas</span><strong>R$ 4.180,30</strong><small class="negative">49,6% da receita</small></article>
+                </div>
+                <div class="mock-grid">
+                  <article class="mock-chart-card">
+                    <div class="mock-card-title"><strong>Fluxo de caixa</strong><small>6 meses</small></div>
+                    <svg viewBox="0 0 520 190" role="img" aria-label="Gráfico de fluxo de caixa">
+                      <defs><linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6de6c2" stop-opacity=".28"/><stop offset="100%" stop-color="#6de6c2" stop-opacity="0"/></linearGradient></defs>
+                      <path d="M10,145 C58,130 76,144 110,112 C145,80 178,119 220,92 C264,64 294,85 336,48 C376,12 418,62 510,30 L510,180 L10,180 Z" fill="url(#areaGradient)"/>
+                      <path d="M10,145 C58,130 76,144 110,112 C145,80 178,119 220,92 C264,64 294,85 336,48 C376,12 418,62 510,30" fill="none" stroke="#6de6c2" stroke-width="4" stroke-linecap="round"/>
+                      <path d="M10,155 C68,150 90,135 134,144 C179,154 212,123 255,133 C301,144 327,105 379,119 C422,130 458,94 510,108" fill="none" stroke="#57708e" stroke-width="3" stroke-linecap="round" stroke-dasharray="5 6"/>
+                    </svg>
+                  </article>
+                  <article class="mock-donut-card">
+                    <div class="mock-card-title"><strong>Gastos por categoria</strong><small>Agosto</small></div>
+                    <div class="mock-donut"><div><strong>R$ 4,1k</strong><small>total</small></div></div>
+                    <div class="mock-legend"><span><i class="l1"></i>Moradia</span><span><i class="l2"></i>Alimentação</span><span><i class="l3"></i>Transporte</span></div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="floating-insight"><span>✦</span><div><small>Insight do mês</small><strong>Você economizou 18% a mais.</strong></div></div>
         </div>
       </section>
 
-      <section class="view" id="customers"><div class="panel"><h2>Clientes</h2><div id="customersList" class="customer-grid"></div></div></section>
+      <section class="trust-strip"><p>Uma visão financeira completa para</p><div><span>Autônomos</span><span>Freelancers</span><span>MEIs</span><span>Pequenos negócios</span><span>Vida pessoal</span></div></section>
 
-      <section class="view" id="billing"><div class="hero-card"><p class="eyebrow">Cobrança mensal</p><h2 id="planName">SalesBoard Pro</h2><p id="planDescription">Dashboard completo para acompanhar suas vendas e clientes.</p><strong id="planPrice">R$ 49,90/mês</strong><button class="primary" id="checkoutBtn">Assinar agora</button><small id="checkoutMessage">A função de checkout usa Stripe no Netlify Functions.</small></div></section>
+      <section class="section-light" id="recursos">
+        <div class="section-heading center"><span class="eyebrow">Tudo em um só lugar</span><h2>Controle completo sem transformar<br>sua rotina em contabilidade.</h2><p>Do primeiro lançamento ao fechamento do mês, tudo foi pensado para ser rápido, claro e agradável de usar.</p></div>
+        <div class="feature-bento">
+          <article class="feature-card feature-wide feature-dark">
+            <div class="feature-copy"><span class="feature-icon">⌁</span><h3>Fluxo de caixa que você entende</h3><p>Veja o que entrou, o que saiu e como seu saldo evolui. Compare períodos e antecipe meses apertados.</p><ul><li>Visão diária, mensal e anual</li><li>Entradas x saídas</li><li>Previsão de saldo</li></ul></div>
+            <div class="feature-visual cashflow-visual"><div class="visual-toolbar"><span>Fluxo de caixa</span><small>Últimos 6 meses ▾</small></div><div class="visual-bars"><div><i style="height:44%"></i><b style="height:27%"></b><span>Mar</span></div><div><i style="height:62%"></i><b style="height:38%"></b><span>Abr</span></div><div><i style="height:54%"></i><b style="height:42%"></b><span>Mai</span></div><div><i style="height:77%"></i><b style="height:35%"></b><span>Jun</span></div><div><i style="height:68%"></i><b style="height:40%"></b><span>Jul</span></div><div><i style="height:88%"></i><b style="height:46%"></b><span>Ago</span></div></div></div>
+          </article>
+          <article class="feature-card"><span class="feature-icon green">◈</span><h3>Categorias do seu jeito</h3><p>Crie, edite, agrupe e personalize categorias com ícones e limites mensais.</p><div class="category-chips"><span>🏠 Moradia</span><span>🛒 Mercado</span><span>🚗 Transporte</span><span>+ Nova categoria</span></div></article>
+          <article class="feature-card"><span class="feature-icon blue">◎</span><h3>Metas que viram progresso</h3><p>Defina objetivos, acompanhe aportes e saiba quanto falta para chegar lá.</p><div class="goal-preview"><div><span>Reserva de emergência</span><strong>72%</strong></div><i><b></b></i><small>R$ 7.200 de R$ 10.000</small></div></article>
+          <article class="feature-card feature-wide accent-card"><div class="feature-copy"><span class="feature-icon purple">✦</span><h3>Relatórios que contam uma história</h3><p>Entenda hábitos, descubra onde o dinheiro está indo e compare seu desempenho sem precisar montar fórmulas.</p></div><div class="report-preview"><div class="report-kpi"><span>Taxa de economia</span><strong>31,4%</strong><small>+6,2 p.p. vs. mês anterior</small></div><div class="report-lines"><i></i><i></i><i></i><i></i><i></i></div></div></article>
+        </div>
+      </section>
 
-      <section class="view" id="settings"><form class="panel form" id="settingsForm"><h2>Valores personalizáveis</h2><label>Nome do sistema<input name="appName"></label><label>Nome do plano<input name="planName"></label><label>Mensalidade<input name="monthlyPrice" type="number" step="0.01"></label><label>Moeda<select name="currency"><option value="BRL">BRL</option><option value="USD">USD</option><option value="EUR">EUR</option></select></label><label>Meta mensal<input name="monthlyGoal" type="number" step="0.01"></label><label>Ticket sugerido<input name="defaultTicket" type="number" step="0.01"></label><label>Descrição<textarea name="planDescription" rows="3"></textarea></label><button class="primary" type="submit">Salvar configurações</button></form></section>
+      <section class="how-section" id="como-funciona"><div class="how-inner"><div class="section-heading light"><span class="eyebrow">Comece em minutos</span><h2>Menos tempo organizando.<br>Mais tempo decidindo.</h2></div><div class="steps-grid"><article><span class="step-number">01</span><div class="step-icon">＋</div><h3>Crie sua conta</h3><p>Cadastre-se e escolha se o espaço será pessoal, profissional ou para seu negócio.</p></article><article><span class="step-number">02</span><div class="step-icon">▣</div><h3>Configure suas finanças</h3><p>Adicione contas, categorias, saldos iniciais e limites do jeito que funciona para você.</p></article><article><span class="step-number">03</span><div class="step-icon">↗</div><h3>Acompanhe sua evolução</h3><p>Registre movimentações e deixe o dashboard transformar números em clareza.</p></article></div></div></section>
+
+      <section class="section-light pricing-section" id="planos">
+        <div class="section-heading center"><span class="eyebrow">Preço simples e justo</span><h2>Escolha o nível de controle<br>que faz sentido para você.</h2><p>Teste por 7 dias. Sem fidelidade. Cancele quando quiser.</p><div class="billing-toggle" role="group" aria-label="Periodicidade do plano"><button class="active" data-billing="monthly">Mensal</button><button data-billing="annual">Anual <span>2 meses grátis</span></button></div></div>
+        <div class="pricing-grid">
+          <article class="price-card"><div><span class="plan-tag">Essencial</span><h3>Para organizar de verdade</h3><p>O necessário para sair da planilha e ter visão total.</p></div><div class="price"><small>R$</small><strong data-monthly="14,90" data-annual="12,42">14,90</strong><span>/mês</span></div><button class="btn btn-outline-dark btn-block" data-open-auth="register" data-plan="Essencial">Começar grátis</button><ul><li>✓ Entradas e saídas ilimitadas</li><li>✓ Categorias personalizadas</li><li>✓ Até 3 contas</li><li>✓ Orçamentos mensais</li><li>✓ Dashboard e relatórios básicos</li><li>✓ Exportação CSV</li></ul></article>
+          <article class="price-card popular"><div class="popular-ribbon">Mais escolhido</div><div><span class="plan-tag">Pro</span><h3>Para quem quer evoluir</h3><p>Mais inteligência, metas e previsibilidade para seu dinheiro.</p></div><div class="price"><small>R$</small><strong data-monthly="24,90" data-annual="20,75">24,90</strong><span>/mês</span></div><button class="btn btn-primary btn-block" data-open-auth="register" data-plan="Pro">Testar o Pro grátis</button><ul><li>✓ Tudo do Essencial</li><li>✓ Contas ilimitadas</li><li>✓ Metas e planejamento</li><li>✓ Lançamentos recorrentes</li><li>✓ Relatórios avançados</li><li>✓ Exportação PDF e CSV</li><li>✓ Alertas inteligentes</li></ul></article>
+          <article class="price-card"><div><span class="plan-tag">Negócios</span><h3>Para autônomos e pequenos times</h3><p>Controle financeiro com visão profissional e colaboração.</p></div><div class="price"><small>R$</small><strong data-monthly="39,90" data-annual="33,25">39,90</strong><span>/mês</span></div><button class="btn btn-outline-dark btn-block" data-open-auth="register" data-plan="Negócios">Começar grátis</button><ul><li>✓ Tudo do Pro</li><li>✓ Até 3 usuários</li><li>✓ Centros de custo</li><li>✓ Clientes e fornecedores</li><li>✓ DRE simplificada</li><li>✓ Permissões de equipe</li><li>✓ Suporte prioritário</li></ul></article>
+        </div>
+      </section>
+
+      <section class="testimonial-section"><div class="section-heading center light"><span class="eyebrow">Feito para dar clareza</span><h2>Quando os números ficam simples,<br>as decisões ficam melhores.</h2></div><div class="testimonial-grid"><article><div class="stars">★★★★★</div><p>“Eu tinha tudo em planilha e sempre deixava para depois. Aqui eu bato o olho e já sei onde estou gastando mais.”</p><footer><span>MC</span><div><strong>Marina Costa</strong><small>Designer freelancer</small></div></footer></article><article><div class="stars">★★★★★</div><p>“O fluxo de caixa e as metas viraram parte da rotina. Parece um sistema caro, mas sem a complexidade de um ERP.”</p><footer><span>RL</span><div><strong>Rafael Lima</strong><small>MEI · Serviços</small></div></footer></article><article><div class="stars">★★★★★</div><p>“Consigo separar pessoal e trabalho sem virar uma bagunça. O relatório mensal é o que mais uso.”</p><footer><span>AS</span><div><strong>Ana Souza</strong><small>Autônoma</small></div></footer></article></div></section>
+
+      <section class="section-light faq-section" id="faq"><div class="faq-layout"><div class="section-heading"><span class="eyebrow">Dúvidas frequentes</span><h2>Você pergunta.<br>A gente simplifica.</h2><p>A ideia é que começar seja tão simples quanto usar o sistema.</p></div><div class="faq-list"><details open><summary>Preciso cadastrar cartão para testar?<span>＋</span></summary><p>Não. O teste de 7 dias começa sem cobrança e sem exigir cartão. Você escolhe um plano somente quando quiser continuar.</p></details><details><summary>Posso criar minhas próprias categorias?<span>＋</span></summary><p>Sim. Você pode criar, renomear, escolher ícones, definir tipo de movimentação e configurar limites mensais.</p></details><details><summary>Funciona no celular?<span>＋</span></summary><p>Sim. Toda a interface foi pensada para desktop, tablet e celular, incluindo navegação simplificada em telas pequenas.</p></details><details><summary>Consigo cancelar quando quiser?<span>＋</span></summary><p>Sim. Não há fidelidade. O cancelamento encerra a renovação e seu acesso continua até o fim do período pago.</p></details><details><summary>Meus dados ficam seguros?<span>＋</span></summary><p>Na versão comercial, autenticação, banco de dados e pagamentos ficam separados da interface pública, com boas práticas de segurança e backups.</p></details></div></div></section>
+
+      <section class="final-cta"><div class="cta-glow"></div><div><span class="eyebrow light-pill">Seu próximo mês começa agora</span><h2>Troque a ansiedade financeira<br>por clareza.</h2><p>Comece grátis. Organize em minutos. Decida melhor todos os dias.</p><button class="btn btn-light btn-lg" data-open-auth="register">Criar minha conta grátis <span>→</span></button><small>7 dias grátis · sem cartão · cancele quando quiser</small></div></section>
     </main>
-  </div>
+
+    <footer class="marketing-footer"><div class="footer-top"><div class="footer-brand"><a class="brand" href="#inicio"><span class="brand-mark"><i></i><i></i><i></i></span><span>SalesBoard <b>Finance</b></span></a><p>Controle financeiro claro para pessoas e pequenos negócios.</p></div><div class="footer-columns"><div><strong>Produto</strong><a href="#recursos">Recursos</a><a href="#planos">Planos</a><a href="#como-funciona">Como funciona</a></div><div><strong>Empresa</strong><a href="#">Sobre</a><a href="#">Contato</a><a href="#">Afiliados</a></div><div><strong>Legal</strong><a href="#">Privacidade</a><a href="#">Termos de uso</a><a href="#">Segurança</a></div></div></div><div class="footer-bottom"><span>© 2026 SalesBoard Finance. Todos os direitos reservados.</span><span>Feito no Brasil 🇧🇷</span></div></footer>
+  </section>
+
+  <section id="app" class="app" hidden>
+    <aside class="app-sidebar" id="app-sidebar">
+      <div class="app-brand-row"><a class="brand app-brand" href="#"><span class="brand-mark"><i></i><i></i><i></i></span><span>SalesBoard <b>Finance</b></span></a><button class="icon-btn sidebar-close" id="sidebar-close" aria-label="Fechar menu">×</button></div>
+      <div class="workspace-switcher"><span class="workspace-avatar">FE</span><div><small>Espaço financeiro</small><strong id="workspace-name">Felipe Empreendimentos</strong></div><button>⌄</button></div>
+      <nav class="app-nav" id="app-nav"><span class="nav-label">Visão geral</span><button class="active" data-view="dashboard"><span>⌂</span>Dashboard</button><button data-view="transactions"><span>⇄</span>Lançamentos <i class="nav-count" id="nav-tx-count">8</i></button><button data-view="accounts"><span>▣</span>Contas</button><span class="nav-label">Planejamento</span><button data-view="categories"><span>◫</span>Categorias</button><button data-view="budgets"><span>◉</span>Orçamentos</button><button data-view="goals"><span>◎</span>Metas</button><span class="nav-label">Análise</span><button data-view="reports"><span>⌁</span>Relatórios</button><button data-view="billing"><span>◇</span>Meu plano</button></nav>
+      <div class="sidebar-footer"><div class="upgrade-card"><span>PRO</span><strong>Tenha visão total</strong><p>Relatórios avançados, metas e muito mais.</p><button data-view="billing">Ver plano Pro →</button></div><button class="sidebar-user" id="sidebar-user-btn"><span class="user-avatar">FL</span><div><strong>Felipe Lasta</strong><small>felipe@exemplo.com</small></div><span>⋯</span></button></div>
+    </aside>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div class="app-main">
+      <header class="app-topbar"><div class="topbar-left"><button class="icon-btn menu-toggle" id="app-menu-toggle" aria-label="Abrir menu">☰</button><div><p class="topbar-breadcrumb" id="breadcrumb">Visão geral / <strong>Dashboard</strong></p></div></div><div class="topbar-actions"><button class="search-trigger" id="global-search"><span>⌕</span><span>Buscar...</span><kbd>⌘ K</kbd></button><button class="icon-btn" title="Ajuda">?</button><button class="icon-btn notification-btn" title="Notificações">♢<i></i></button><button class="btn btn-primary btn-sm" id="quick-add-btn"><span>＋</span> Novo lançamento</button></div></header>
+
+      <main class="app-content" id="app-content">
+        <section class="app-view active" data-page="dashboard">
+          <div class="page-header"><div><span class="page-kicker">Quarta-feira, 12 de agosto</span><h1>Olá, Felipe 👋</h1><p>Aqui está um resumo da sua vida financeira neste mês.</p></div><div class="page-actions"><button class="btn btn-soft" id="month-filter">Agosto 2026 ▾</button><button class="btn btn-dark" id="dashboard-add"><span>＋</span> Lançamento</button></div></div>
+          <div class="financial-summary-grid" id="summary-grid"></div>
+          <div class="dashboard-grid primary-grid"><article class="app-card cashflow-card"><div class="card-head"><div><span class="card-title">Fluxo de caixa</span><p>Entradas e saídas dos últimos 6 meses</p></div><div class="legend-inline"><span><i class="income-dot"></i>Entradas</span><span><i class="expense-dot"></i>Saídas</span><button class="dots-btn">•••</button></div></div><div class="chart-wrap"><canvas id="cashflow-chart" width="900" height="320"></canvas></div></article><article class="app-card category-chart-card"><div class="card-head"><div><span class="card-title">Despesas por categoria</span><p>Agosto de 2026</p></div><button class="dots-btn">•••</button></div><div class="category-chart-layout"><div class="donut-wrap"><canvas id="category-chart" width="260" height="260"></canvas><div class="donut-center"><small>Total</small><strong id="expense-total-donut">R$ 0</strong></div></div><div class="category-legend" id="category-legend"></div></div></article></div>
+          <div class="dashboard-grid secondary-grid"><article class="app-card transactions-card"><div class="card-head"><div><span class="card-title">Últimos lançamentos</span><p>Movimentações recentes</p></div><button class="text-btn" data-view="transactions">Ver todos →</button></div><div class="transaction-list compact" id="recent-transactions"></div></article><article class="app-card health-card"><div class="card-head"><div><span class="card-title">Saúde financeira</span><p>Seu desempenho no mês</p></div><span class="score-badge">Muito boa</span></div><div class="health-score"><div class="score-ring" id="health-ring"><span><strong id="health-score-value">82</strong><small>/100</small></span></div><div class="health-copy"><strong>Você está no caminho certo.</strong><p>Sua taxa de economia cresceu e os gastos estão dentro do planejado.</p></div></div><div class="health-metrics" id="health-metrics"></div></article></div>
+          <div class="dashboard-grid tertiary-grid"><article class="app-card budget-mini-card"><div class="card-head"><div><span class="card-title">Orçamentos</span><p>Limites deste mês</p></div><button class="text-btn" data-view="budgets">Gerenciar →</button></div><div id="budget-mini-list" class="budget-mini-list"></div></article><article class="app-card goals-mini-card"><div class="card-head"><div><span class="card-title">Metas em andamento</span><p>Continue avançando</p></div><button class="text-btn" data-view="goals">Ver metas →</button></div><div id="goals-mini-list" class="goals-mini-list"></div></article></div>
+        </section>
+
+        <section class="app-view" data-page="transactions"><div class="page-header"><div><span class="page-kicker">Movimentações</span><h1>Lançamentos</h1><p>Registre e acompanhe tudo que entra e sai.</p></div><button class="btn btn-primary" id="transactions-add"><span>＋</span> Novo lançamento</button></div><div class="app-card table-card"><div class="table-toolbar"><div class="segmented" id="tx-type-filter"><button class="active" data-filter="all">Todos</button><button data-filter="income">Entradas</button><button data-filter="expense">Saídas</button></div><div class="toolbar-actions"><label class="table-search"><span>⌕</span><input id="tx-search" placeholder="Buscar lançamento" /></label><button class="btn btn-soft">Filtros <span>⌄</span></button><button class="btn btn-soft" id="export-csv">Exportar</button></div></div><div class="table-responsive"><table class="data-table"><thead><tr><th>Descrição</th><th>Categoria</th><th>Conta</th><th>Data</th><th>Status</th><th class="align-right">Valor</th><th></th></tr></thead><tbody id="transactions-table-body"></tbody></table></div><div class="table-footer"><span id="table-count">0 lançamentos</span><div class="pagination"><button disabled>←</button><button class="active">1</button><button>2</button><button>3</button><button>→</button></div></div></div></section>
+
+        <section class="app-view" data-page="accounts"><div class="page-header"><div><span class="page-kicker">Seu patrimônio</span><h1>Contas</h1><p>Centralize saldos de bancos, dinheiro e carteiras.</p></div><button class="btn btn-primary" id="account-add"><span>＋</span> Nova conta</button></div><div class="accounts-summary" id="accounts-summary"></div><div class="accounts-grid" id="accounts-grid"></div></section>
+        <section class="app-view" data-page="categories"><div class="page-header"><div><span class="page-kicker">Organização</span><h1>Categorias</h1><p>Personalize a estrutura para refletir sua realidade.</p></div><button class="btn btn-primary" id="category-add"><span>＋</span> Nova categoria</button></div><div class="category-page-tabs segmented"><button class="active" data-category-tab="expense">Categorias de saída</button><button data-category-tab="income">Categorias de entrada</button></div><div class="category-manager-grid" id="category-manager-grid"></div></section>
+        <section class="app-view" data-page="budgets"><div class="page-header"><div><span class="page-kicker">Planejamento mensal</span><h1>Orçamentos</h1><p>Defina limites por categoria e saiba antes de extrapolar.</p></div><button class="btn btn-primary" id="budget-add"><span>＋</span> Novo orçamento</button></div><div class="budget-overview" id="budget-overview"></div><div class="budget-grid" id="budget-grid"></div></section>
+        <section class="app-view" data-page="goals"><div class="page-header"><div><span class="page-kicker">Seus objetivos</span><h1>Metas financeiras</h1><p>Transforme planos em números e acompanhe cada avanço.</p></div><button class="btn btn-primary" id="goal-add"><span>＋</span> Nova meta</button></div><div class="goals-grid" id="goals-grid"></div></section>
+
+        <section class="app-view" data-page="reports"><div class="page-header"><div><span class="page-kicker">Análise financeira</span><h1>Relatórios</h1><p>Encontre padrões e tome decisões com base nos seus dados.</p></div><div class="page-actions"><button class="btn btn-soft">Agosto 2026 ▾</button><button class="btn btn-dark" id="report-export">Exportar relatório</button></div></div><div class="report-kpis" id="report-kpis"></div><div class="dashboard-grid report-grid"><article class="app-card"><div class="card-head"><div><span class="card-title">Evolução mensal</span><p>Saldo líquido por mês</p></div></div><div class="chart-wrap large"><canvas id="report-line-chart" width="900" height="380"></canvas></div></article><article class="app-card"><div class="card-head"><div><span class="card-title">Composição das despesas</span><p>Participação por categoria</p></div></div><div class="report-category-list" id="report-category-list"></div></article></div><article class="app-card insights-card"><div class="card-head"><div><span class="card-title">Insights do período</span><p>Leituras automáticas a partir dos seus lançamentos</p></div><span class="ai-label">✦ Inteligência financeira</span></div><div class="insights-grid" id="insights-grid"></div></article></section>
+
+        <section class="app-view" data-page="billing"><div class="page-header"><div><span class="page-kicker">Assinatura</span><h1>Meu plano</h1><p>Gerencie sua assinatura e escolha os recursos que precisa.</p></div></div><div class="current-plan-card"><div><span class="plan-pill">Plano atual</span><h2>Pro</h2><p>Você está no teste grátis. Aproveite todos os recursos até <strong>19 de agosto de 2026</strong>.</p></div><div class="current-plan-price"><small>Depois do teste</small><strong>R$ 24,90</strong><span>/mês</span><button class="btn btn-soft">Gerenciar cobrança</button></div></div><div class="app-pricing-grid"><article><span>Essencial</span><h3>R$ 14,90<small>/mês</small></h3><ul><li>Entradas e saídas ilimitadas</li><li>Categorias personalizadas</li><li>Até 3 contas</li><li>Relatórios básicos</li></ul><button class="btn btn-soft btn-block" data-subscribe="Essencial">Escolher Essencial</button></article><article class="selected"><div class="selected-label">Seu plano</div><span>Pro</span><h3>R$ 24,90<small>/mês</small></h3><ul><li>Tudo do Essencial</li><li>Contas ilimitadas</li><li>Metas e recorrências</li><li>Relatórios avançados</li></ul><button class="btn btn-primary btn-block" data-subscribe="Pro">Assinar Pro</button></article><article><span>Negócios</span><h3>R$ 39,90<small>/mês</small></h3><ul><li>Tudo do Pro</li><li>Até 3 usuários</li><li>Centros de custo</li><li>DRE simplificada</li></ul><button class="btn btn-soft btn-block" data-subscribe="Negócios">Escolher Negócios</button></article></div></section>
+      </main>
+
+      <nav class="mobile-bottom-nav" aria-label="Navegação do aplicativo"><button class="active" data-view="dashboard"><span>⌂</span><small>Início</small></button><button data-view="transactions"><span>⇄</span><small>Lançamentos</small></button><button class="mobile-add" id="mobile-add"><span>＋</span></button><button data-view="budgets"><span>◉</span><small>Planejar</small></button><button id="mobile-more"><span>☰</span><small>Mais</small></button></nav>
+    </div>
+  </section>
+
+  <div class="modal-backdrop" id="auth-modal" hidden><div class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title"><button class="modal-close" data-close-modal="auth-modal" aria-label="Fechar">×</button><div class="auth-brand"><span class="brand-mark"><i></i><i></i><i></i></span><span>SalesBoard <b>Finance</b></span></div><div class="auth-copy"><span class="auth-kicker" id="auth-kicker">Comece grátis</span><h2 id="auth-title">Crie sua conta</h2><p id="auth-subtitle">7 dias para experimentar tudo. Sem cartão.</p></div><div class="social-login"><button><span>G</span> Continuar com Google</button></div><div class="divider"><span>ou continue com e-mail</span></div><form id="auth-form"><div class="form-field" id="name-field"><label for="auth-name">Seu nome</label><input id="auth-name" name="name" autocomplete="name" placeholder="Como podemos chamar você?" /></div><div class="form-field"><label for="auth-email">E-mail</label><input id="auth-email" name="email" type="email" autocomplete="email" placeholder="voce@exemplo.com" required /></div><div class="form-field"><label for="auth-password">Senha</label><div class="password-wrap"><input id="auth-password" name="password" type="password" autocomplete="current-password" placeholder="Mínimo de 8 caracteres" required minlength="8" /><button type="button" id="toggle-password">◉</button></div></div><div class="auth-options"><label><input type="checkbox" checked /> <span id="terms-label">Aceito os Termos e a Política de Privacidade</span></label><a href="#" id="forgot-link" hidden>Esqueci minha senha</a></div><button class="btn btn-primary btn-block btn-lg" type="submit" id="auth-submit">Criar conta grátis</button></form><p class="auth-switch" id="auth-switch">Já tem uma conta? <button data-switch-auth="login">Entrar</button></p><small class="secure-note">🔒 Seus dados são protegidos e nunca são vendidos.</small></div></div>
+
+  <div class="modal-backdrop" id="transaction-modal" hidden><div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="transaction-modal-title"><div class="modal-header"><div><span class="modal-kicker">Movimentação</span><h2 id="transaction-modal-title">Novo lançamento</h2></div><button class="modal-close inline" data-close-modal="transaction-modal">×</button></div><form id="transaction-form"><div class="type-toggle"><label><input type="radio" name="type" value="expense" checked><span>↓ Saída</span></label><label><input type="radio" name="type" value="income"><span>↑ Entrada</span></label></div><div class="form-grid"><div class="form-field full"><label for="tx-description">Descrição</label><input id="tx-description" required placeholder="Ex: Supermercado, cliente, aluguel..." /></div><div class="form-field"><label for="tx-amount">Valor</label><div class="money-input"><span>R$</span><input id="tx-amount" inputmode="decimal" required placeholder="0,00" /></div></div><div class="form-field"><label for="tx-date">Data</label><input id="tx-date" type="date" required /></div><div class="form-field"><label for="tx-category">Categoria</label><select id="tx-category" required></select></div><div class="form-field"><label for="tx-account">Conta</label><select id="tx-account" required></select></div><div class="form-field full"><label for="tx-note">Observação <small>opcional</small></label><textarea id="tx-note" rows="3" placeholder="Adicione detalhes sobre este lançamento"></textarea></div><label class="switch-row full"><span><strong>Lançamento recorrente</strong><small>Repita automaticamente nos próximos meses</small></span><input type="checkbox" id="tx-recurring" /><i></i></label></div><div class="modal-footer"><button type="button" class="btn btn-soft" data-close-modal="transaction-modal">Cancelar</button><button type="submit" class="btn btn-primary">Salvar lançamento</button></div></form></div></div>
+
+  <div class="modal-backdrop" id="category-modal" hidden><div class="app-modal small" role="dialog" aria-modal="true" aria-labelledby="category-modal-title"><div class="modal-header"><div><span class="modal-kicker">Organização</span><h2 id="category-modal-title">Nova categoria</h2></div><button class="modal-close inline" data-close-modal="category-modal">×</button></div><form id="category-form"><div class="form-grid"><div class="form-field"><label for="category-name">Nome</label><input id="category-name" required placeholder="Ex: Lazer" /></div><div class="form-field"><label for="category-icon">Ícone</label><select id="category-icon"><option>🛒</option><option>🏠</option><option>🚗</option><option>🍽️</option><option>🎮</option><option>💡</option><option>💼</option><option>💰</option><option>📚</option><option>❤️</option><option>✈️</option><option>📦</option></select></div><div class="form-field full"><label>Tipo</label><div class="type-toggle compact"><label><input type="radio" name="category-type" value="expense" checked><span>Saída</span></label><label><input type="radio" name="category-type" value="income"><span>Entrada</span></label></div></div><div class="form-field full"><label for="category-budget">Limite mensal <small>opcional</small></label><div class="money-input"><span>R$</span><input id="category-budget" inputmode="decimal" placeholder="0,00" /></div></div></div><div class="modal-footer"><button type="button" class="btn btn-soft" data-close-modal="category-modal">Cancelar</button><button type="submit" class="btn btn-primary">Criar categoria</button></div></form></div></div>
+
+  <div class="modal-backdrop" id="account-modal" hidden><div class="app-modal small" role="dialog" aria-modal="true" aria-labelledby="account-modal-title"><div class="modal-header"><div><span class="modal-kicker">Patrimônio</span><h2 id="account-modal-title">Nova conta</h2></div><button class="modal-close inline" data-close-modal="account-modal">×</button></div><form id="account-form"><div class="form-grid"><div class="form-field full"><label for="account-name">Nome da conta</label><input id="account-name" required placeholder="Ex: Nubank PJ" /></div><div class="form-field"><label for="account-type">Tipo</label><select id="account-type"><option value="bank">Conta bancária</option><option value="cash">Dinheiro</option><option value="wallet">Carteira digital</option><option value="investment">Investimento</option></select></div><div class="form-field"><label for="account-balance">Saldo inicial</label><div class="money-input"><span>R$</span><input id="account-balance" inputmode="decimal" required placeholder="0,00" /></div></div></div><div class="modal-footer"><button type="button" class="btn btn-soft" data-close-modal="account-modal">Cancelar</button><button type="submit" class="btn btn-primary">Adicionar conta</button></div></form></div></div>
+
+  <div class="modal-backdrop" id="goal-modal" hidden><div class="app-modal small" role="dialog" aria-modal="true" aria-labelledby="goal-modal-title"><div class="modal-header"><div><span class="modal-kicker">Objetivos</span><h2 id="goal-modal-title">Nova meta</h2></div><button class="modal-close inline" data-close-modal="goal-modal">×</button></div><form id="goal-form"><div class="form-grid"><div class="form-field full"><label for="goal-name">Nome da meta</label><input id="goal-name" required placeholder="Ex: Reserva de emergência" /></div><div class="form-field"><label for="goal-target">Valor objetivo</label><div class="money-input"><span>R$</span><input id="goal-target" inputmode="decimal" required placeholder="0,00" /></div></div><div class="form-field"><label for="goal-current">Valor já guardado</label><div class="money-input"><span>R$</span><input id="goal-current" inputmode="decimal" placeholder="0,00" /></div></div><div class="form-field full"><label for="goal-date">Prazo</label><input id="goal-date" type="date" required /></div></div><div class="modal-footer"><button type="button" class="btn btn-soft" data-close-modal="goal-modal">Cancelar</button><button type="submit" class="btn btn-primary">Criar meta</button></div></form></div></div>
+
+  <div class="modal-backdrop" id="search-modal" hidden><div class="search-modal" role="dialog" aria-modal="true"><div class="global-search-input"><span>⌕</span><input id="global-search-input" placeholder="Busque lançamentos, categorias, contas..." autocomplete="off" /><kbd>ESC</kbd></div><div class="search-results" id="search-results"><span class="search-hint">Acesso rápido</span><button data-view="transactions">⇄ <span><strong>Lançamentos</strong><small>Ver todas as entradas e saídas</small></span></button><button data-view="categories">◫ <span><strong>Categorias</strong><small>Personalizar organização</small></span></button><button data-view="reports">⌁ <span><strong>Relatórios</strong><small>Analisar seu desempenho</small></span></button></div></div></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
