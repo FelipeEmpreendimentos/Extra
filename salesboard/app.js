@@ -65,21 +65,6 @@
     window.addEventListener('scroll', sync, { passive: true });
   }
 
-  function initProductionLinks() {
-    // GitHub Pages is the public demonstration. Authentication/billing run on the production host.
-    if (!location.hostname.endsWith('github.io')) return;
-
-    $$('a[href^="app/?mode="]').forEach((link) => {
-      const original = new URL(link.href);
-      const demo = new URL('app/', location.href);
-      demo.searchParams.set('demo', '1');
-      if (original.searchParams.get('plan')) demo.searchParams.set('plan', original.searchParams.get('plan'));
-      demo.searchParams.set('billing', original.searchParams.get('billing') || billingCycle);
-      link.href = demo.href;
-      link.title = 'No GitHub Pages, este botão abre a demonstração. O cadastro real roda no ambiente de produção.';
-    });
-  }
-
   function initSmoothAnchors() {
     $$('a[href^="#"]').forEach((link) => {
       link.addEventListener('click', (event) => {
@@ -95,6 +80,5 @@
   initBillingToggle();
   initFaq();
   initHeader();
-  initProductionLinks();
   initSmoothAnchors();
 })();
