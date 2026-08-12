@@ -1,11 +1,11 @@
-name: Apply SalesBoard product coherence
+name: Apply SalesBoard final semantic review
 
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/salesboard-product-coherence-temp.yml"
-      - "salesboard/scripts/finalize_product_coherence.py"
+      - "salesboard/scripts/final_semantic_review.py"
   workflow_dispatch:
 
 permissions:
@@ -19,25 +19,26 @@ jobs:
         with:
           ref: main
 
-      - name: Apply final coherence fixes
-        run: python salesboard/scripts/finalize_product_coherence.py
+      - name: Apply final semantic review
+        run: python salesboard/scripts/final_semantic_review.py
 
-      - name: Validate final behavior
+      - name: Validate final semantics
         run: |
           node --check salesboard/app/app.js
-          grep -Fq "GOAL_REQUIRES_INCOME" salesboard/app/app.js
-          grep -Fq "type === 'income'" salesboard/app/app.js
-          grep -Fq "() => exportCSV()" salesboard/app/app.js
-          grep -Fq "subtitle: 'Meta'" salesboard/app/app.js
+          grep -Fq 'id="tx-goal-amount"' salesboard/app/index.html
+          grep -Fq 'goal_amount' salesboard/app/app.js
+          grep -Fq 'Acima do limite' salesboard/app/app.js
+          grep -Fq 'Alterar no portal' salesboard/app/app.js
+          if grep -Fq 'data-contribute-goal' salesboard/app/app.js; then exit 1; fi
 
-      - name: Commit final coherence fixes
+      - name: Commit final semantic review
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add salesboard/app/app.js
+          git add salesboard/app/index.html salesboard/app/app.js salesboard/app/quality.css
           if git diff --cached --quiet; then
             echo "Nothing to commit"
             exit 0
           fi
-          git commit -m "Refine goal semantics and export behavior"
+          git commit -m "Finish SalesBoard semantic relationships"
           git push origin main
