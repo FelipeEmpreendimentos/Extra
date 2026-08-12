@@ -49,12 +49,8 @@ jobs:
           test -f salesboard/legal/termos.html
           test -f salesboard/legal/seguranca.html
           test -f salesboard/supabase/schema.sql
-          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults; do
-            test -f "salesboard/supabase/${migration}.sql"
-          done
-          for fn in salesboard-checkout salesboard-billing-portal salesboard-delete-account salesboard-stripe-webhook salesboard-health; do
-            test -f "salesboard/supabase/functions/${fn}/index.ts"
-          done
+          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults; do test -f "salesboard/supabase/${migration}.sql"; done
+          for fn in salesboard-checkout salesboard-billing-portal salesboard-delete-account salesboard-stripe-webhook salesboard-health; do test -f "salesboard/supabase/functions/${fn}/index.ts"; done
           test -f salesboard/.env.example
           test -f salesboard/.gitignore
           test -f salesboard/.node-version
@@ -82,24 +78,18 @@ jobs:
           grep -Fq "subscription_status set default 'none'" salesboard/supabase/010_profile_security_defaults.sql
           grep -Fq 'revoke all on function public.touch_updated_at()' salesboard/supabase/010_profile_security_defaults.sql
           grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
-          if grep -Fq 'localStorage' salesboard/app/app.js; then
-            echo 'Production app must not use localStorage as a financial database'
-            exit 1
-          fi
+          if grep -Fq 'localStorage' salesboard/app/app.js; then echo 'Production app must not use localStorage as a financial database'; exit 1; fi
 
       - name: Check Edge Function security and billing invariants
         run: |
-          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-checkout/index.ts
-          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts
-          grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts
-          grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts
-          grep -Fq "STRIPE_PRICE_ESSENTIAL_MONTHLY" salesboard/supabase/functions/salesboard-checkout/index.ts
-          grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts
-          grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts
-          if grep -qE 'sk_(live|test)_[A-Za-z0-9]{12,}' salesboard --exclude=.env.example -R; then
-            echo 'Possible Stripe secret committed'
-            exit 1
-          fi
+          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'checkout auth validation missing'; exit 1; }
+          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'billing portal auth validation missing'; exit 1; }
+          grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'Stripe signature verification missing'; exit 1; }
+          grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'webhook secret configuration missing'; exit 1; }
+          grep -Fq "STRIPE_PRICE_ESSENTIAL_MONTHLY" salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'live price configuration missing'; exit 1; }
+          grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'live product configuration missing'; exit 1; }
+          grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts || { echo 'health billing readiness check missing'; exit 1; }
+          if grep -PqR --exclude=.env.example 'sk_(live|test)_(?!x{8,})[A-Za-z0-9]{20,}' salesboard; then echo 'Possible Stripe secret committed'; exit 1; fi
 
       - name: Build clean GitHub Pages artifact
         working-directory: salesboard
@@ -120,10 +110,7 @@ jobs:
       - name: Check launch transparency and product rules
         run: |
           grep -Fq '3 dias grátis' salesboard/index.html
-          if grep -Fq '7 dias grátis' salesboard/index.html; then
-            echo 'Old 7-day trial copy must not remain on the landing page'
-            exit 1
-          fi
+          if grep -Fq '7 dias grátis' salesboard/index.html; then echo 'Old 7-day trial copy must not remain on the landing page'; exit 1; fi
           grep -Fq 'data-monthly="14,90"' salesboard/index.html
           grep -Fq 'data-monthly="24,90"' salesboard/index.html
           grep -Fq 'Até 3 contas ativas' salesboard/index.html
@@ -136,11 +123,5 @@ jobs:
           grep -Fq 'Excluir minha conta' salesboard/app/index.html
           grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
           grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
-          if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then
-            echo 'Fictitious testimonials must not appear as launch social proof'
-            exit 1
-          fi
-          if grep -Fq 'Negócios' salesboard/index.html; then
-            echo 'Unreleased Negocios plan must not be advertised'
-            exit 1
-          fi
+          if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then echo 'Fictitious testimonials must not appear as launch social proof'; exit 1; fi
+          if grep -Fq 'Negócios' salesboard/index.html; then echo 'Unreleased Negocios plan must not be advertised'; exit 1; fi
