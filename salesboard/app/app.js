@@ -1205,12 +1205,37 @@
     $('#sidebar-overlay').classList.remove('open');
   }
 
+  async function googleProviderAvailable() {
+    try {
+      const response = await fetch(`${publicConfig.supabaseUrl}/auth/v1/settings`, {
+        headers: { apikey: publicConfig.supabasePublishableKey, Accept: 'application/json' },
+        cache: 'no-store'
+      });
+      if (!response.ok) return null;
+      const settings = await response.json();
+      return settings?.external?.google === true;
+    } catch (error) {
+      console.warn('Não foi possível verificar o provedor Google.', error);
+      return null;
+    }
+  }
+
   async function signInWithGoogle() {
     const button = $('#google-auth-button');
     if (!supabaseClient) return;
-    setButtonLoading(button, true, 'Abrindo Google...');
+    setButtonLoading(button, true, 'Verificando Google...');
     setAuthMessage('');
     try {
+      const available = await googleProviderAvailable();
+      if (available !== true) {
+        const message = available === false
+          ? 'O login com Google ainda não está habilitado. Use e-mail e senha por enquanto; estamos finalizando essa configuração.'
+          : 'Não foi possível verificar o login com Google agora. Tente novamente ou use e-mail e senha.';
+        setAuthMessage(message, true);
+        return;
+      }
+
+      setButtonLoading(button, true, 'Abrindo Google...');
       sessionStorage.setItem('salesboard_oauth_intent', JSON.stringify({ plan: requestedPlan, billing: billingCycle, createdAt: Date.now() }));
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
@@ -1220,8 +1245,9 @@
       if (!data?.url) throw new Error('Não foi possível iniciar o login com Google.');
       location.assign(data.url);
     } catch (error) {
-      setButtonLoading(button, false);
       setAuthMessage(authErrorMessage(error), true);
+    } finally {
+      setButtonLoading(button, false);
     }
   }
 
