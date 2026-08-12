@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.111.0'
 
 const PROD_ORIGIN = 'https://felipeempreendimentos.github.io'
-const priceMap: Record<string, string> = {
+const TEST_PRICES: Record<string, string> = {
   'essential:monthly': 'price_1U3eqnRlODNbnkUiLRDXlIZm',
   'essential:annual': 'price_1U3erCRlODNbnkUiYSxDq1e6',
   'pro:monthly': 'price_1U3eqyRlODNbnkUirbXIqvR8',
@@ -34,9 +34,23 @@ function adminClient() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-async function stripeRequest(path: string, init: RequestInit = {}, idempotencyKey?: string) {
-  const secret = Deno.env.get('STRIPE_SECRET_KEY')
+function stripeSecret() {
+  const secret = Deno.env.get('STRIPE_SECRET_KEY') || ''
   if (!secret) throw new Error('STRIPE_NOT_CONFIGURED')
+  return secret
+}
+
+function stripePrice(plan: 'essential' | 'pro', cycle: 'monthly' | 'annual') {
+  const secret = stripeSecret()
+  const envName = `STRIPE_PRICE_${plan.toUpperCase()}_${cycle.toUpperCase()}`
+  const configured = Deno.env.get(envName)
+  if (configured) return configured
+  if (secret.startsWith('sk_test_')) return TEST_PRICES[`${plan}:${cycle}`]
+  throw new Error('STRIPE_CATALOG_NOT_CONFIGURED')
+}
+
+async function stripeRequest(path: string, init: RequestInit = {}, idempotencyKey?: string) {
+  const secret = stripeSecret()
   const headers: Record<string, string> = {
     Authorization: `Bearer ${secret}`,
     'Content-Type': 'application/x-www-form-urlencoded'
@@ -98,7 +112,7 @@ Deno.serve(async (req) => {
     const params = new URLSearchParams()
     params.set('mode', 'subscription')
     params.set('customer', customerId)
-    params.set('line_items[0][price]', priceMap[`${plan}:${billingCycle}`])
+    params.set('line_items[0][price]', stripePrice(plan, billingCycle))
     params.set('line_items[0][quantity]', '1')
     params.set('success_url', `${appUrl}?checkout=success`)
     params.set('cancel_url', `${appUrl}?checkout=cancelled`)
@@ -116,9 +130,12 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ id: checkout.id, url: checkout.url }), { status: 200, headers })
   } catch (error) {
     console.error(error)
-    const message = error instanceof Error && error.message === 'STRIPE_NOT_CONFIGURED'
+    const raw = error instanceof Error ? error.message : String(error)
+    const message = raw === 'STRIPE_NOT_CONFIGURED'
       ? 'Cobrança ainda não configurada no servidor.'
-      : 'Não foi possível iniciar o checkout. Tente novamente em instantes.'
+      : raw === 'STRIPE_CATALOG_NOT_CONFIGURED'
+        ? 'Catálogo de cobrança de produção ainda não configurado.'
+        : 'Não foi possível iniciar o checkout. Tente novamente em instantes.'
     return new Response(JSON.stringify({ error: message }), { status: 500, headers })
   }
 })
