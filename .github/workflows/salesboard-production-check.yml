@@ -49,7 +49,7 @@ jobs:
           test -f salesboard/legal/termos.html
           test -f salesboard/legal/seguranca.html
           test -f salesboard/supabase/schema.sql
-          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults 011_product_coherence; do test -f "salesboard/supabase/${migration}.sql"; done
+          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults 011_product_coherence 012_goal_income_semantics; do test -f "salesboard/supabase/${migration}.sql"; done
           for fn in salesboard-checkout salesboard-billing-portal salesboard-delete-account salesboard-stripe-webhook salesboard-health; do test -f "salesboard/supabase/functions/${fn}/index.ts"; done
           test -f salesboard/.env.example
           test -f salesboard/.gitignore
@@ -80,6 +80,7 @@ jobs:
           grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
           grep -Fq 'goal_id' salesboard/supabase/011_product_coherence.sql
           grep -Fq 'categories_income_budget_zero' salesboard/supabase/011_product_coherence.sql
+          grep -Fq 'GOAL_REQUIRES_INCOME' salesboard/supabase/012_goal_income_semantics.sql
           if grep -Fq 'localStorage' salesboard/app/app.js; then echo 'Production app must not use localStorage as a financial database'; exit 1; fi
 
       - name: Check Edge Function security and billing invariants
@@ -126,6 +127,7 @@ jobs:
           grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
           grep -Fq 'id="report-month"' salesboard/app/index.html
           grep -Fq 'id="tx-goal"' salesboard/app/index.html
+          grep -Fq "goal_id: hasPro() && type === 'income'" salesboard/app/app.js
           grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
           if grep -Fq '2 meses grátis' salesboard/index.html salesboard/app/index.html; then echo 'Annual plan must not be advertised as extra free trial time'; exit 1; fi
           if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then echo 'Fictitious testimonials must not appear as launch social proof'; exit 1; fi
