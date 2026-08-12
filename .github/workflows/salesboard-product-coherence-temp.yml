@@ -19,8 +19,19 @@ jobs:
         with:
           ref: main
 
-      - name: Apply coherence patch
-        run: python salesboard/scripts/apply_product_coherence.py
+      - name: Fix patch helper and apply coherence patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('salesboard/scripts/apply_product_coherence.py')
+          text = path.read_text(encoding='utf-8')
+          old = "updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)"
+          new = "updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)"
+          if old not in text:
+              raise SystemExit('sub_once helper not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python salesboard/scripts/apply_product_coherence.py
 
       - name: Validate JavaScript and required relationships
         run: |
