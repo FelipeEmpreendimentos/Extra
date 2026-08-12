@@ -38,9 +38,9 @@
         });
 
         $$('.plan-link[data-plan]').forEach((link) => {
-          const url = new URL(link.getAttribute('href'), location.href);
+          const url = new URL(link.href);
           url.searchParams.set('billing', billingCycle);
-          link.setAttribute('href', `${url.pathname}${url.search}`.replace(location.pathname.replace(/[^/]+$/, ''), ''));
+          link.href = url.href;
         });
       });
     });
@@ -66,17 +66,15 @@
   }
 
   function initProductionLinks() {
-    // GitHub Pages remains a public demo. Real accounts and billing run on Netlify/custom domain.
+    // GitHub Pages is the public demonstration. Authentication/billing run on the production host.
     if (!location.hostname.endsWith('github.io')) return;
 
     $$('a[href^="app/?mode="]').forEach((link) => {
-      const url = new URL(link.href);
-      const plan = url.searchParams.get('plan');
-      const cycle = url.searchParams.get('billing') || billingCycle;
+      const original = new URL(link.href);
       const demo = new URL('app/', location.href);
       demo.searchParams.set('demo', '1');
-      if (plan) demo.searchParams.set('plan', plan);
-      demo.searchParams.set('billing', cycle);
+      if (original.searchParams.get('plan')) demo.searchParams.set('plan', original.searchParams.get('plan'));
+      demo.searchParams.set('billing', original.searchParams.get('billing') || billingCycle);
       link.href = demo.href;
       link.title = 'No GitHub Pages, este botão abre a demonstração. O cadastro real roda no ambiente de produção.';
     });
