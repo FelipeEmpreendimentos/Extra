@@ -20,7 +20,17 @@ async function inspectLayout(page,bucket,label){
     const offenders=[];
     for(const el of document.querySelectorAll('body *')){if(!visible(el)||offCanvas(el))continue;const r=el.getBoundingClientRect();if((r.left<-2||r.right>vw+2)&&!hasScrollParent(el)){offenders.push({tag:el.tagName.toLowerCase(),id:el.id||'',cls:String(el.className||'').slice(0,120),top:Math.round(r.top),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width)});if(offenders.length>=25)break}}
     const tinyTargets=[];
-    for(const el of document.querySelectorAll('button,a[href],input,select')){if(!visible(el)||offCanvas(el))continue;const r=el.getBoundingClientRect();if(!inViewport(r))continue;if((r.width<32||r.height<32)&&!el.closest('.table-wrap')){tinyTargets.push({tag:el.tagName.toLowerCase(),id:el.id||'',cls:String(el.className||'').slice(0,80),text:(el.textContent||'').trim().slice(0,60),width:Math.round(r.width),height:Math.round(r.height)});if(tinyTargets.length>=25)break}}
+    for(const el of document.querySelectorAll('button,a[href],input,select')){
+      if(!visible(el)||offCanvas(el))continue;
+      let target=el;
+      if(el instanceof HTMLInputElement && ['checkbox','radio'].includes(el.type)){
+        const label=el.closest('label');
+        if(label&&visible(label))target=label;
+      }
+      const r=target.getBoundingClientRect();
+      if(!inViewport(r))continue;
+      if((r.width<32||r.height<32)&&!el.closest('.table-wrap')){tinyTargets.push({tag:el.tagName.toLowerCase(),id:el.id||'',cls:String(el.className||'').slice(0,80),text:(target.textContent||'').trim().slice(0,60),width:Math.round(r.width),height:Math.round(r.height)});if(tinyTargets.length>=25)break}
+    }
     return {viewport:{width:vw,height:vh},scrollWidth:Math.max(root.scrollWidth,body?.scrollWidth||0),scrollHeight:Math.max(root.scrollHeight,body?.scrollHeight||0),offenders,tinyTargets,activeModal:[...document.querySelectorAll('.modal:not([hidden]),.sb-delete-overlay')].map(m=>{const card=m.querySelector('.modal-card,.sb-delete-dialog')||m,r=card.getBoundingClientRect();return{top:Math.round(r.top),bottom:Math.round(r.bottom),left:Math.round(r.left),right:Math.round(r.right),width:Math.round(r.width),height:Math.round(r.height),overflowY:getComputedStyle(card).overflowY}})};
   });
   bucket.measurements.push({label,...metrics});
@@ -33,13 +43,7 @@ async function inspectLayout(page,bucket,label){
 async function waitForApp(page){await page.goto(`${base}/app/?demo=1`,{waitUntil:'networkidle',timeout:60000});await page.waitForSelector('#app-shell:not([hidden])',{timeout:30000});await page.waitForTimeout(300)}
 async function candidateInViewport(locator,page){if(!(await locator.isVisible().catch(()=>false)))return false;const box=await locator.boundingBox();if(!box)return false;const vp=page.viewportSize();return box.x+box.width>0&&box.x<vp.width&&box.y+box.height>0&&box.y<vp.height}
 async function safeActivate(locator){try{await locator.click({timeout:1500});return true}catch{try{await locator.evaluate(el=>el.click());return true}catch{return false}}}
-async function clickView(page,view){
-  const mobile=page.locator(`.mobile-nav [data-view="${view}"]`);
-  if(await candidateInViewport(mobile,page)){if(await safeActivate(mobile)){await page.waitForTimeout(120);return true}}
-  const sidebar=page.locator(`#main-nav [data-view="${view}"]`);
-  if(await sidebar.count()){if(await safeActivate(sidebar)){await page.waitForTimeout(120);return true}}
-  const any=page.locator(`[data-view="${view}"]`).first();if(await any.count()&&await safeActivate(any)){await page.waitForTimeout(120);return true}return false;
-}
+async function clickView(page,view){const mobile=page.locator(`.mobile-nav [data-view="${view}"]`);if(await candidateInViewport(mobile,page)){if(await safeActivate(mobile)){await page.waitForTimeout(120);return true}}const sidebar=page.locator(`#main-nav [data-view="${view}"]`);if(await sidebar.count()){if(await safeActivate(sidebar)){await page.waitForTimeout(120);return true}}const any=page.locator(`[data-view="${view}"]`).first();if(await any.count()&&await safeActivate(any)){await page.waitForTimeout(120);return true}return false}
 async function firstViewportVisible(page,selector){const loc=page.locator(selector);for(let i=0;i<await loc.count();i++){const item=loc.nth(i);if(await candidateInViewport(item,page))return item}return null}
 
 async function auditViewport(browser,vp){
