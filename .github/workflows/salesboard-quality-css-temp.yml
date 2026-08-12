@@ -1,0 +1,42 @@
+name: Link SalesBoard quality CSS
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/salesboard-quality-css-temp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Link hardening stylesheets
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('salesboard/index.html')
+          text=root.read_text(encoding='utf-8')
+          if 'href="quality.css"' not in text:
+              text=text.replace('<link rel="stylesheet" href="launch.css" />','<link rel="stylesheet" href="launch.css" />\n  <link rel="stylesheet" href="quality.css" />')
+              root.write_text(text,encoding='utf-8')
+          app=Path('salesboard/app/index.html')
+          text=app.read_text(encoding='utf-8')
+          if 'href="quality.css"' not in text:
+              text=text.replace('<link rel="stylesheet" href="app.css" />','<link rel="stylesheet" href="app.css" />\n  <link rel="stylesheet" href="quality.css" />')
+              app.write_text(text,encoding='utf-8')
+          PY
+      - name: Commit linked styles
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/index.html salesboard/app/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Link responsive quality hardening styles"
+          git push
