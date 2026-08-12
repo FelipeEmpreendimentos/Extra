@@ -33,9 +33,11 @@ jobs:
           test -f salesboard/index.html
           test -f salesboard/styles.css
           test -f salesboard/launch.css
+          test -f salesboard/quality.css
           test -f salesboard/app.js
           test -f salesboard/app/index.html
           test -f salesboard/app/app.css
+          test -f salesboard/app/quality.css
           test -f salesboard/app/app.js
           test -f salesboard/app/runtime-bridge.js
           test -f salesboard/favicon.svg
@@ -79,7 +81,7 @@ jobs:
           grep -Fq 'complete_salesboard_onboarding' salesboard/supabase/009_atomic_onboarding_completion.sql
           grep -Fq "subscription_status set default 'none'" salesboard/supabase/010_profile_security_defaults.sql
           grep -Fq 'revoke all on function public.touch_updated_at()' salesboard/supabase/010_profile_security_defaults.sql
-          grep -Fq 'revoke all on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
+          grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
           if grep -Fq 'localStorage' salesboard/app/app.js; then
             echo 'Production app must not use localStorage as a financial database'
             exit 1
@@ -104,10 +106,12 @@ jobs:
         run: |
           rm -rf .ci-dist
           mkdir -p .ci-dist
-          cp index.html styles.css launch.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .ci-dist/
+          cp index.html styles.css launch.css quality.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .ci-dist/
           cp -R app legal .ci-dist/
           test -f .ci-dist/index.html
+          test -f .ci-dist/quality.css
           test -f .ci-dist/app/index.html
+          test -f .ci-dist/app/quality.css
           test -f .ci-dist/legal/privacidade.html
           test ! -e .ci-dist/supabase
           test ! -e .ci-dist/.env.example
@@ -131,6 +135,7 @@ jobs:
           grep -Fq 'legal/termos.html' salesboard/index.html
           grep -Fq 'Excluir minha conta' salesboard/app/index.html
           grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
+          grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
           if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then
             echo 'Fictitious testimonials must not appear as launch social proof'
             exit 1
