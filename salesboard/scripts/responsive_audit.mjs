@@ -15,9 +15,7 @@ const viewports = [
 const screenshotSizes = new Set(['320x568','390x844','768x1024','1366x768','1920x1080','2560x1440']);
 const report = { generatedAt: new Date().toISOString(), base, summary: {}, results: [] };
 
-function addIssue(bucket, severity, code, detail) {
-  bucket.issues.push({ severity, code, detail });
-}
+function addIssue(bucket, severity, code, detail) { bucket.issues.push({ severity, code, detail }); }
 
 async function inspectLayout(page, bucket, label) {
   const metrics = await page.evaluate(() => {
@@ -30,6 +28,8 @@ async function inspectLayout(page, bucket, label) {
       const r = el.getBoundingClientRect();
       return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || 1) > 0 && r.width > 0 && r.height > 0;
     };
+    const intersectsViewport = (r) => r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh;
+    const intentionallyOffCanvas = (el) => Boolean(el.closest('.sidebar:not(.open)'));
     const hasScrollParent = (el) => {
       let p = el.parentElement;
       while (p && p !== body) {
@@ -41,28 +41,28 @@ async function inspectLayout(page, bucket, label) {
     };
     const offenders = [];
     for (const el of document.querySelectorAll('body *')) {
-      if (!visible(el)) continue;
+      if (!visible(el) || intentionallyOffCanvas(el)) continue;
       const r = el.getBoundingClientRect();
+      if (!intersectsViewport(r)) continue;
       if ((r.left < -2 || r.right > vw + 2) && !hasScrollParent(el)) {
-        offenders.push({
-          tag: el.tagName.toLowerCase(), id: el.id || '', cls: String(el.className || '').slice(0,120),
-          left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width)
-        });
+        offenders.push({ tag: el.tagName.toLowerCase(), id: el.id || '', cls: String(el.className || '').slice(0,120), left: Math.round(r.left), right: Math.round(r.right), width: Math.round(r.width) });
         if (offenders.length >= 20) break;
       }
     }
     const tinyTargets = [];
     for (const el of document.querySelectorAll('button,a[href],input,select')) {
-      if (!visible(el)) continue;
+      if (!visible(el) || intentionallyOffCanvas(el)) continue;
       const r = el.getBoundingClientRect();
+      if (!intersectsViewport(r)) continue;
       if ((r.width < 32 || r.height < 32) && !el.closest('.table-wrap')) {
-        tinyTargets.push({ tag: el.tagName.toLowerCase(), id: el.id || '', text: (el.textContent || '').trim().slice(0,60), width: Math.round(r.width), height: Math.round(r.height) });
+        tinyTargets.push({ tag: el.tagName.toLowerCase(), id: el.id || '', cls: String(el.className || '').slice(0,80), text: (el.textContent || '').trim().slice(0,60), width: Math.round(r.width), height: Math.round(r.height) });
         if (tinyTargets.length >= 20) break;
       }
     }
+    const directOverflow = Math.max(root.scrollWidth, body?.scrollWidth || 0);
     return {
       viewport: { width: vw, height: vh },
-      scrollWidth: Math.max(root.scrollWidth, body?.scrollWidth || 0),
+      scrollWidth: directOverflow,
       scrollHeight: Math.max(root.scrollHeight, body?.scrollHeight || 0),
       offenders,
       tinyTargets,
@@ -79,29 +79,65 @@ async function inspectLayout(page, bucket, label) {
   if (metrics.tinyTargets.length) addIssue(bucket, 'low', 'small-interactive-targets', `${label}: ${metrics.tinyTargets.length} alvo(s) abaixo de 32px; amostra ${JSON.stringify(metrics.tinyTargets.slice(0,5))}`);
   for (const modal of metrics.activeModal) {
     if (modal.left < -2 || modal.right > metrics.viewport.width + 2) addIssue(bucket, 'critical', 'modal-horizontal-overflow', `${label}: ${JSON.stringify(modal)}`);
-    if (modal.top < -2 || modal.bottom > metrics.viewport.height + 2) {
-      if (!/(auto|scroll)/.test(modal.overflowY)) addIssue(bucket, 'high', 'modal-vertical-clipping', `${label}: ${JSON.stringify(modal)}`);
-    }
+    if ((modal.top < -2 || modal.bottom > metrics.viewport.height + 2) && !/(auto|scroll)/.test(modal.overflowY)) addIssue(bucket, 'high', 'modal-vertical-clipping', `${label}: ${JSON.stringify(modal)}`);
   }
 }
 
 async function waitForApp(page) {
   await page.goto(`${base}/app/?demo=1`, { waitUntil: 'networkidle', timeout: 60000 });
   await page.waitForSelector('#app-shell:not([hidden])', { timeout: 30000 });
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(300);
+}
+
+async function candidateInViewport(locator, page) {
+  if (!(await locator.isVisible().catch(() => false))) return false;
+  const box = await locator.boundingBox();
+  if (!box) return false;
+  const vp = page.viewportSize();
+  return box.x + box.width > 0 && box.x < vp.width && box.y + box.height > 0 && box.y < vp.height;
 }
 
 async function clickView(page, view) {
+  const mobile = page.locator(`.mobile-nav [data-view="${view}"]`);
+  if (await candidateInViewport(mobile, page)) {
+    await mobile.click();
+    await page.waitForTimeout(150);
+    return true;
+  }
+
+  const sidebarButton = page.locator(`#main-nav [data-view="${view}"]`);
+  if (!(await candidateInViewport(sidebarButton, page))) {
+    const menu = page.locator('#menu-button');
+    if (await candidateInViewport(menu, page)) {
+      await menu.click();
+      await page.waitForTimeout(100);
+    }
+  }
+  if (await candidateInViewport(sidebarButton, page)) {
+    await sidebarButton.click();
+    await page.waitForTimeout(150);
+    return true;
+  }
+
   const candidates = page.locator(`[data-view="${view}"]`);
-  const count = await candidates.count();
-  for (let i = 0; i < count; i++) {
-    if (await candidates.nth(i).isVisible()) {
-      await candidates.nth(i).click();
-      await page.waitForTimeout(180);
+  for (let i = 0; i < await candidates.count(); i++) {
+    const item = candidates.nth(i);
+    if (await candidateInViewport(item, page)) {
+      await item.click();
+      await page.waitForTimeout(150);
       return true;
     }
   }
   return false;
+}
+
+async function firstViewportVisible(page, selector) {
+  const loc = page.locator(selector);
+  for (let i = 0; i < await loc.count(); i++) {
+    const item = loc.nth(i);
+    if (await candidateInViewport(item, page)) return item;
+  }
+  return null;
 }
 
 async function auditViewport(browser, vp) {
@@ -114,7 +150,7 @@ async function auditViewport(browser, vp) {
 
   try {
     await page.goto(`${base}/`, { waitUntil: 'networkidle', timeout: 60000 });
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(200);
     await inspectLayout(page, bucket, 'landing');
     if (screenshotSizes.has(vp.name)) await page.screenshot({ path: path.join(outDir, `landing-${vp.name}.png`), fullPage: true });
 
@@ -124,37 +160,31 @@ async function auditViewport(browser, vp) {
 
     const views = ['transactions','accounts','budgets','goals','reports','billing','settings'];
     for (const view of views) {
-      const clicked = await clickView(page, view);
-      if (!clicked) {
-        addIssue(bucket, 'medium', 'view-not-reachable', view);
-        continue;
-      }
+      if (!(await clickView(page, view))) { addIssue(bucket, 'medium', 'view-not-reachable', view); continue; }
       await inspectLayout(page, bucket, `view:${view}`);
-      if (screenshotSizes.has(vp.name) && ['transactions','reports','billing'].includes(view)) {
-        await page.screenshot({ path: path.join(outDir, `${view}-${vp.name}.png`), fullPage: true });
-      }
+      if (screenshotSizes.has(vp.name) && ['transactions','reports','billing'].includes(view)) await page.screenshot({ path: path.join(outDir, `${view}-${vp.name}.png`), fullPage: true });
     }
 
     await clickView(page, 'transactions');
-    const addTx = page.locator('[data-open-transaction]').filter({ visible: true }).first();
-    if (await addTx.count()) {
-      await addTx.click(); await page.waitForTimeout(120);
+    const addTx = await firstViewportVisible(page, '[data-open-transaction]');
+    if (addTx) {
+      await addTx.click(); await page.waitForTimeout(100);
       await inspectLayout(page, bucket, 'modal:transaction');
       await page.locator('#transaction-modal [data-close-modal]').first().click();
     } else addIssue(bucket, 'medium', 'transaction-modal-unreachable', 'botão não encontrado');
 
     await clickView(page, 'accounts');
-    const addAccount = page.locator('#add-account');
-    if (await addAccount.isVisible().catch(() => false)) {
-      await addAccount.click(); await page.waitForTimeout(120);
+    const addAccount = await firstViewportVisible(page, '#add-account');
+    if (addAccount) {
+      await addAccount.click(); await page.waitForTimeout(100);
       await inspectLayout(page, bucket, 'modal:account');
       await page.locator('#entity-modal [data-close-modal]').first().click();
     }
 
     await clickView(page, 'budgets');
-    const addCategory = page.locator('#add-category');
-    if (await addCategory.isVisible().catch(() => false)) {
-      await addCategory.click(); await page.waitForTimeout(120);
+    const addCategory = await firstViewportVisible(page, '#add-category');
+    if (addCategory) {
+      await addCategory.click(); await page.waitForTimeout(100);
       await inspectLayout(page, bucket, 'modal:category');
       await page.locator('#entity-modal [data-close-modal]').first().click();
     }
@@ -166,9 +196,7 @@ async function auditViewport(browser, vp) {
     if (relevantFailed.length) addIssue(bucket, 'medium', 'failed-requests', JSON.stringify(relevantFailed.slice(0,8)));
   } catch (error) {
     addIssue(bucket, 'critical', 'audit-exception', String(error?.stack || error));
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
   return bucket;
 }
 
@@ -183,9 +211,6 @@ fs.writeFileSync(path.join(outDir, 'responsive-audit.json'), JSON.stringify(repo
 console.log(JSON.stringify(report.summary));
 for (const r of report.results) {
   if (!r.issues.length) console.log(`PASS ${r.viewport}`);
-  else {
-    console.log(`ISSUES ${r.viewport}`);
-    for (const issue of r.issues) console.log(`  [${issue.severity}] ${issue.code}: ${issue.detail}`);
-  }
+  else { console.log(`ISSUES ${r.viewport}`); for (const issue of r.issues) console.log(`  [${issue.severity}] ${issue.code}: ${issue.detail}`); }
 }
 if (counts.critical || counts.high) process.exitCode = 1;
