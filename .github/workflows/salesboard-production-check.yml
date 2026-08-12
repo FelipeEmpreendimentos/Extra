@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Use production Node version
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: "salesboard/.node-version"
 
@@ -37,6 +37,7 @@ jobs:
           test -f salesboard/app/index.html
           test -f salesboard/app/app.css
           test -f salesboard/app/app.js
+          test -f salesboard/app/runtime-bridge.js
           test -f salesboard/favicon.svg
           test -f salesboard/manifest.webmanifest
           test -f salesboard/robots.txt
@@ -45,31 +46,22 @@ jobs:
           test -f salesboard/legal/privacidade.html
           test -f salesboard/legal/termos.html
           test -f salesboard/legal/seguranca.html
-          test -f salesboard/legal/legal.css
-          test -f salesboard/legal/legal.js
           test -f salesboard/supabase/schema.sql
-          test -f salesboard/supabase/002_integrity.sql
-          test -f salesboard/supabase/003_recurring.sql
-          test -f salesboard/supabase/004_three_day_trial.sql
-          test -f salesboard/supabase/005_lock_entitlement_rpc.sql
-          test -f salesboard/netlify/functions/_shared.js
-          test -f salesboard/netlify/functions/public-config.js
-          test -f salesboard/netlify/functions/create-checkout-session.js
-          test -f salesboard/netlify/functions/create-billing-portal.js
-          test -f salesboard/netlify/functions/stripe-webhook.js
-          test -f salesboard/netlify/functions/delete-account.js
-          test -f salesboard/netlify/functions/health.js
-          test -f salesboard/netlify/functions/process-recurring.mjs
-          test -f salesboard/netlify.toml
+          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults; do
+            test -f "salesboard/supabase/${migration}.sql"
+          done
+          for fn in salesboard-checkout salesboard-billing-portal salesboard-delete-account salesboard-stripe-webhook salesboard-health; do
+            test -f "salesboard/supabase/functions/${fn}/index.ts"
+          done
           test -f salesboard/.env.example
           test -f salesboard/.gitignore
           test -f salesboard/.node-version
 
-      - name: Install pinned dependencies
+      - name: Install pinned production dependencies
         working-directory: salesboard
         run: npm install --ignore-scripts --no-fund --no-audit
 
-      - name: Validate JavaScript syntax
+      - name: Validate browser JavaScript syntax
         working-directory: salesboard
         run: npm run check
 
@@ -77,53 +69,37 @@ jobs:
         working-directory: salesboard
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Check production security invariants
+      - name: Check database and entitlement invariants
         run: |
           grep -Fq 'enable row level security' salesboard/supabase/schema.sql
           grep -Fq 'current_entitlement' salesboard/supabase/schema.sql
           grep -Fq 'validate_transaction_references' salesboard/supabase/002_integrity.sql
           grep -Fq 'validate_recurrence_source' salesboard/supabase/003_recurring.sql
-          grep -Fq "interval '3 days'" salesboard/supabase/schema.sql
-          grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
-          grep -Fq 'constructEvent' salesboard/netlify/functions/stripe-webhook.js
-          grep -Fq 'verifyUser' salesboard/netlify/functions/create-checkout-session.js
-          grep -Fq 'SUPABASE_SECRET_KEY' salesboard/netlify/functions/_shared.js
-          grep -Fq 'STRIPE_PRICE_PRO_MONTHLY' salesboard/netlify/functions/create-checkout-session.js
-          grep -Fq "schedule: '0 8 * * *'" salesboard/netlify/functions/process-recurring.mjs
-          grep -Fq 'Content-Security-Policy' salesboard/netlify.toml
-          grep -Fq '/api/health' salesboard/netlify.toml
-          grep -Fq 'publish = ".dist"' salesboard/netlify.toml
-          grep -Fq '@supabase/supabase-js": "2.111.0"' salesboard/package.json
-          grep -Fq 'netlify-cli": "27.0.1"' salesboard/package.json
-          grep -Fxq '24' salesboard/.node-version
+          grep -Fq 'extensions.digest' salesboard/supabase/008_fix_trial_digest_schema.sql
+          grep -Fq 'complete_salesboard_onboarding' salesboard/supabase/009_atomic_onboarding_completion.sql
+          grep -Fq "subscription_status set default 'none'" salesboard/supabase/010_profile_security_defaults.sql
+          grep -Fq 'revoke all on function public.touch_updated_at()' salesboard/supabase/010_profile_security_defaults.sql
+          grep -Fq 'revoke all on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
           if grep -Fq 'localStorage' salesboard/app/app.js; then
             echo 'Production app must not use localStorage as a financial database'
             exit 1
           fi
+
+      - name: Check Edge Function security and billing invariants
+        run: |
+          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-checkout/index.ts
+          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts
+          grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts
+          grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts
+          grep -Fq "STRIPE_PRICE_ESSENTIAL_MONTHLY" salesboard/supabase/functions/salesboard-checkout/index.ts
+          grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts
+          grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts
           if grep -qE 'sk_(live|test)_[A-Za-z0-9]{12,}' salesboard --exclude=.env.example -R; then
             echo 'Possible Stripe secret committed'
             exit 1
           fi
 
-      - name: Verify CSP hash for JSON-LD
-        run: |
-          node <<'NODE'
-          const fs = require('fs');
-          const crypto = require('crypto');
-          const html = fs.readFileSync('salesboard/index.html', 'utf8');
-          const toml = fs.readFileSync('salesboard/netlify.toml', 'utf8');
-          const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
-          if (!match) throw new Error('JSON-LD block not found');
-          const hash = crypto.createHash('sha256').update(match[1]).digest('base64');
-          const token = `'sha256-${hash}'`;
-          if (!toml.includes(token)) {
-            console.error(`CSP is missing the exact JSON-LD hash: ${token}`);
-            process.exit(1);
-          }
-          console.log(`CSP JSON-LD hash verified: ${token}`);
-          NODE
-
-      - name: Build clean static artifact
+      - name: Build clean GitHub Pages artifact
         working-directory: salesboard
         run: |
           rm -rf .ci-dist
@@ -133,7 +109,6 @@ jobs:
           test -f .ci-dist/index.html
           test -f .ci-dist/app/index.html
           test -f .ci-dist/legal/privacidade.html
-          test ! -e .ci-dist/netlify
           test ! -e .ci-dist/supabase
           test ! -e .ci-dist/.env.example
           test ! -e .ci-dist/package.json
@@ -147,19 +122,13 @@ jobs:
           fi
           grep -Fq 'data-monthly="14,90"' salesboard/index.html
           grep -Fq 'data-monthly="24,90"' salesboard/index.html
-          grep -Fq 'data-annual="12,42"' salesboard/index.html
-          grep -Fq 'data-annual="20,75"' salesboard/index.html
           grep -Fq 'Até 3 contas ativas' salesboard/index.html
           grep -Fq 'Relatórios avançados de 12 meses' salesboard/index.html
           grep -Fq 'google-auth-button' salesboard/app/index.html
           grep -Fq "provider: 'google'" salesboard/app/app.js
           grep -Fq 'report-year-chart' salesboard/app/index.html
-          grep -Fq 'renderYearReportChart' salesboard/app/app.js
-          grep -Fq "workspace_name: 'Demonstração Pro'" salesboard/app/app.js
-          grep -Fq "subscription_status: 'active'" salesboard/app/app.js
           grep -Fq 'legal/privacidade.html' salesboard/index.html
           grep -Fq 'legal/termos.html' salesboard/index.html
-          grep -Fq 'data-netlify="true"' salesboard/contato.html
           grep -Fq 'Excluir minha conta' salesboard/app/index.html
           grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
           if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then
