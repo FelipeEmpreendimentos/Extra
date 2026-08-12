@@ -32,8 +32,10 @@ jobs:
         run: |
           rm -rf .pages-dist
           mkdir -p .pages-dist
-          cp index.html styles.css launch.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .pages-dist/
+          cp index.html styles.css launch.css quality.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .pages-dist/
           cp -R app legal .pages-dist/
+          test -f .pages-dist/quality.css
+          test -f .pages-dist/app/quality.css
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
