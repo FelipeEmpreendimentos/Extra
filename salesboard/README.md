@@ -1,38 +1,39 @@
-# SalesBoard MVP
+# SalesBoard Finance v2
 
-Dashboard responsivo para acompanhar vendas, clientes, metas e assinatura mensal.
+SaaS responsivo de controle financeiro para pessoas, autônomos, MEIs e pequenos negócios.
 
-## O que já funciona
+## O que já existe
 
-- Dashboard com receita, número de vendas, ticket médio e meta mensal
-- Gráfico dos últimos 6 meses em Canvas, sem biblioteca externa
-- Cadastro e exclusão de vendas
-- Busca e filtro por status
-- Visão consolidada de clientes
-- Exportação CSV
-- Configurações salvas no navegador (nome, plano, mensalidade, meta, moeda e ticket sugerido)
-- Página de assinatura mensal
-- Função Netlify para criar uma assinatura recorrente no Stripe Checkout
-- Layout responsivo para desktop e celular
+- Landing page comercial completa com hero, demonstração do produto, recursos, planos, FAQ e CTAs.
+- Fluxo de cadastro/login demonstrativo e período de teste.
+- Dashboard com saldo, entradas, saídas, taxa de economia, fluxo de caixa e saúde financeira.
+- Lançamentos de entrada e saída com conta, categoria, data, observação e recorrência.
+- Categorias personalizáveis para entrada e saída, incluindo limite mensal.
+- Contas bancárias, dinheiro, carteiras e investimentos.
+- Orçamentos mensais por categoria.
+- Metas financeiras com progresso e aportes.
+- Relatórios e insights do período.
+- Busca global, filtros e exportação CSV.
+- Interface totalmente responsiva com sidebar desktop e navegação inferior mobile.
+- Três planos: Essencial (R$ 14,90), Pro (R$ 24,90) e Negócios (R$ 39,90).
+- Checkout Stripe preparado em Netlify Function com preços definidos no servidor.
 
-## Rodar localmente sem cobrança
+## Deploy público
 
-Abra `index.html` diretamente no navegador. O dashboard funciona e os dados ficam no `localStorage`.
+O repositório possui o workflow `.github/workflows/salesboard-pages.yml`, que publica a pasta `salesboard` no GitHub Pages a cada alteração no `main`.
 
-## Rodar com Netlify Functions / Stripe
+> O GitHub Pages hospeda a experiência web estática. A função de cobrança Stripe exige deploy em uma plataforma com funções server-side, como Netlify. O front-end detecta quando o checkout não está disponível e continua operando em modo demonstração.
 
-1. Instale Node.js.
-2. No diretório do projeto, execute `npm install`.
-3. Copie `.env.example` para `.env` e informe sua `STRIPE_SECRET_KEY`.
-4. Execute `npm run dev`.
-5. Abra a URL exibida pelo Netlify CLI.
+## Rodar com Netlify localmente
 
-## Preço personalizável e segurança
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-A interface permite editar a mensalidade livremente para o MVP. Para produção, o valor que realmente será cobrado deve permanecer controlado no servidor, por exemplo via `SUBSCRIPTION_PRICE_CENTS`.
+Configure `STRIPE_SECRET_KEY` e, preferencialmente, os Price IDs recorrentes do Stripe em `STRIPE_PRICE_ESSENCIAL`, `STRIPE_PRICE_PRO` e `STRIPE_PRICE_NEGOCIOS`.
 
-Se `ALLOW_DYNAMIC_PRICE=true`, a função aceita o preço enviado pela interface. Isso é útil apenas em painel administrativo autenticado; não é seguro permitir isso em uma página pública, pois o navegador pode ser manipulado.
+## Status para produção
 
-## Próxima evolução recomendada
-
-Para transformar este MVP em SaaS multiusuário de produção: autenticação, banco de dados, organizações/contas, webhooks Stripe para controlar status de assinatura e autorização de acesso por plano.
+A interface e as regras de demonstração estão prontas para validação de produto. Antes de vender comercialmente, a próxima camada deve substituir o armazenamento local por autenticação e banco multiusuário reais (por exemplo PostgreSQL/Supabase), adicionar webhooks do Stripe, controle de acesso por assinatura, recuperação de senha, termos/política publicados e backups.
