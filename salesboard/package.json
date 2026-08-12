@@ -1,12 +1,14 @@
 {
   "name": "salesboard-finance",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "SaaS responsivo de controle financeiro com dashboard, categorias, metas, orçamentos, relatórios e assinatura recorrente.",
+  "description": "SaaS de controle financeiro com Supabase Auth/Postgres, Stripe Billing e Netlify Functions.",
   "scripts": {
-    "dev": "netlify dev"
+    "dev": "netlify dev",
+    "check": "node --check app.js && node --check app/app.js && node --check netlify/functions/_shared.js && node --check netlify/functions/public-config.js && node --check netlify/functions/create-checkout-session.js && node --check netlify/functions/create-billing-portal.js && node --check netlify/functions/stripe-webhook.js && node --check netlify/functions/delete-account.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
     "stripe": "^18.5.0"
   },
   "devDependencies": {
