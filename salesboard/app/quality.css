@@ -41,3 +41,25 @@ canvas{max-width:100%!important}
   .budget-item header{gap:8px}
   .budget-item header>*{min-width:0}
 }
+
+
+/* Product-coherence controls */
+.report-actions{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}
+.report-month-filter{display:grid;gap:5px;font-size:12px;color:#6f7d8f;font-weight:700}
+.report-month-filter input{min-height:40px;border:1px solid #dbe2ea;border-radius:10px;background:#fff;color:#172130;padding:8px 10px;font:inherit}
+.field-help{display:block;margin-top:6px;color:#7d8998;font-size:11px;line-height:1.35;font-weight:500}
+.setting-note{padding:12px 14px;border:1px solid #e2e7ed;border-radius:12px;background:#f8fafb;display:grid;gap:3px}
+.setting-note span{font-size:12px;color:#7b8796}
+.setting-note strong{font-size:14px;color:#172130}
+.setting-note small,.onboarding-helper{color:#7d8998;line-height:1.45}
+
+@media(max-width:680px){
+  .report-actions{width:100%;display:grid;grid-template-columns:1fr auto}
+  .report-month-filter{min-width:0}
+  .report-month-filter input{width:100%;min-width:0}
+}
+
+@media(max-width:360px){
+  .report-actions{grid-template-columns:1fr}
+  .report-actions .button{width:100%}
+}

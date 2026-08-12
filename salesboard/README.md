@@ -64,11 +64,11 @@ Os limites críticos são reforçados no PostgreSQL, e não apenas escondidos pe
 ## Recursos principais
 
 - Supabase Auth com e-mail/senha, confirmação, recuperação e Google OAuth;
-- onboarding transacional;
+- onboarding transacional, com categorias iniciais coerentes com Pessoal/Autônomo/Negócio e sem orçamentos monetários arbitrários;
 - dashboard, entradas, saídas, contas e categorias;
-- orçamentos e metas;
+- orçamentos e metas vinculáveis a lançamentos;
 - recorrências Pro;
-- relatórios essenciais/avançados conforme entitlement;
+- relatórios essenciais/avançados conforme entitlement, com filtro mensal simples;
 - exportação CSV;
 - pesquisa e filtros;
 - trial único por e-mail;
@@ -130,7 +130,7 @@ Antes de aceitar clientes pagantes:
 ## Segurança
 
 - RLS ativo nas tabelas de usuário;
-- referências conta/categoria/recorrência validadas no banco;
+- referências conta/categoria/meta/recorrência validadas no banco;
 - campos de billing são controlados pelo backend;
 - entitlement é aplicado também no PostgreSQL;
 - chave publishable do Supabase pode ficar no navegador; segredos não;

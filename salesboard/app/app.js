@@ -16,6 +16,8 @@
   let currentView = 'dashboard';
   let transactionFilter = 'all';
   let categoryType = 'expense';
+  let reportMonthKey = currentMonthKey();
+  let transactionGoalPreset = null;
   let onboardingStep = 1;
   let editingTransactionId = null;
   let entityMode = null;
@@ -170,6 +172,16 @@
     return state.accounts.find((item) => item.id === id) || { name: 'Conta removida', icon: '▣' };
   }
 
+  function goalById(id) {
+    return state.goals.find((item) => item.id === id) || null;
+  }
+
+  function goalProgress(goal) {
+    const base = Math.max(0, Number(goal?.current_amount || 0));
+    const linked = paidTransactions().filter((row) => row.goal_id === goal?.id).reduce((sum, row) => sum + Number(row.amount), 0);
+    return Math.min(Number(goal?.target_amount || 0), base + linked);
+  }
+
   function paidTransactions() {
     return state.transactions.filter((item) => item.status === 'paid');
   }
@@ -199,18 +211,15 @@
     return monthTransactions(key).filter((row) => row.type === 'expense' && row.category_id === categoryId).reduce((sum, row) => sum + Number(row.amount), 0);
   }
 
-  function monthSeries(count = 6) {
-    const now = new Date();
+  function monthSeries(count = 6, endKey = currentMonthKey()) {
+    const [anchorYear, anchorMonth] = String(endKey).split('-').map(Number);
+    const anchor = new Date(anchorYear, anchorMonth - 1, 1);
     const output = [];
     for (let index = count - 1; index >= 0; index -= 1) {
-      const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+      const date = new Date(anchor.getFullYear(), anchor.getMonth() - index, 1);
       const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const total = totalsForMonth(key);
-      output.push({
-        key,
-        label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', ''),
-        ...total
-      });
+      output.push({ key, label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', ''), ...total });
     }
     return output;
   }
@@ -224,6 +233,8 @@
     if (message.includes('TRIAL_ALREADY_STARTED')) return 'Seu período de experiência já foi iniciado em outro plano e não pode ser reiniciado.';
     if (message.includes('INVALID_TRIAL_PLAN')) return 'Não foi possível identificar o plano escolhido. Atualize a página e tente novamente.';
     if (message.includes('duplicate key') || error?.code === '23505') return 'Já existe um item com essas informações.';
+    if (message.includes('INVALID_GOAL_REFERENCE')) return 'A meta vinculada não existe mais ou não pertence a esta conta.';
+    if (message.includes('CATEGORY_TYPE_MISMATCH')) return 'A categoria escolhida não combina com o tipo do lançamento.';
     if (message.includes('foreign key')) return 'Este item está sendo usado em lançamentos e não pode ser excluído agora.';
     return message.length > 180 ? 'Não foi possível concluir a operação. Tente novamente.' : message;
   }
@@ -511,8 +522,6 @@
     $('#today-label').textContent = new Intl.DateTimeFormat('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' }).format(new Date());
     $('#settings-name').value = name;
     $('#settings-workspace').value = workspace;
-    $('#settings-type').value = state.profile?.workspace_type || 'personal';
-    $('#settings-currency').value = state.profile?.currency || 'BRL';
     renderTrialCard();
   }
 
@@ -626,12 +635,14 @@
     const query = ($('#transaction-search')?.value || '').trim().toLowerCase();
     let rows = [...state.transactions];
     if (transactionFilter !== 'all') rows = rows.filter((row) => row.type === transactionFilter);
-    if (query) rows = rows.filter((row) => `${row.description} ${categoryById(row.category_id).name} ${accountById(row.account_id).name}`.toLowerCase().includes(query));
+    if (query) rows = rows.filter((row) => `${row.description} ${categoryById(row.category_id).name} ${accountById(row.account_id).name} ${goalById(row.goal_id)?.name || ''}`.toLowerCase().includes(query));
     $('#transactions-empty').hidden = rows.length > 0;
     $('#transactions-body').innerHTML = rows.map((row) => {
       const category = categoryById(row.category_id);
       const account = accountById(row.account_id);
-      return `<tr><td><strong>${escapeHTML(row.description)}</strong>${row.recurring ? '<br><small>Recorrente</small>' : ''}</td><td><span class="category-pill">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</span></td><td>${escapeHTML(account.name)}</td><td>${dateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</td><td><span class="status-pill ${row.status === 'pending' ? 'pending' : ''}">${row.status === 'pending' ? 'Pendente' : 'Pago'}</span></td><td class="right ${row.type === 'income' ? 'value-income' : 'value-expense'}"><strong>${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</strong></td><td><div class="table-actions"><button class="row-button" data-edit-transaction="${row.id}" title="Editar">✎</button><button class="row-button" data-delete-transaction="${row.id}" title="Excluir">×</button></div></td></tr>`;
+      const goal = row.goal_id ? goalById(row.goal_id) : null;
+      const details = [row.recurring ? 'Recorrente' : '', goal ? `Meta: ${goal.icon} ${goal.name}` : ''].filter(Boolean).join(' · ');
+      return `<tr><td><strong>${escapeHTML(row.description)}</strong>${details ? `<br><small>${escapeHTML(details)}</small>` : ''}</td><td><span class="category-pill">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</span></td><td>${escapeHTML(account.name)}</td><td>${dateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</td><td><span class="status-pill ${row.status === 'pending' ? 'pending' : ''}">${row.status === 'pending' ? 'Pendente' : 'Pago'}</span></td><td class="right ${row.type === 'income' ? 'value-income' : 'value-expense'}"><strong>${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</strong></td><td><div class="table-actions"><button class="row-button" data-edit-transaction="${row.id}" title="Editar">✎</button><button class="row-button" data-delete-transaction="${row.id}" title="Excluir">×</button></div></td></tr>`;
     }).join('');
     $$('[data-edit-transaction]').forEach((button) => button.addEventListener('click', () => openTransactionModal(button.dataset.editTransaction)));
     $$('[data-delete-transaction]').forEach((button) => button.addEventListener('click', () => deleteTransaction(button.dataset.deleteTransaction)));
@@ -687,19 +698,29 @@
     }
     $('#goals-grid').innerHTML = state.goals.length ? state.goals.map((goal) => {
       const target = Number(goal.target_amount);
-      const current = Number(goal.current_amount);
+      const current = goalProgress(goal);
       const percent = target ? Math.min(100, current / target * 100) : 0;
-      return `<article class="entity-card goal-card"><div class="goal-top"><span class="goal-icon">${escapeHTML(goal.icon)}</span><div><button class="entity-menu" data-edit-goal="${goal.id}">✎</button><button class="entity-menu" data-delete-goal-row="${goal.id}">×</button></div></div><h3>${escapeHTML(goal.name)}</h3><p>${goal.due_date ? `Prazo: ${dateBR.format(new Date(`${goal.due_date}T12:00:00`))}` : 'Sem prazo definido'}</p><div class="goal-values"><strong>${brl.format(current)}</strong><span>${Math.round(percent)}%</span></div><div class="progress"><i style="width:${percent}%;background:#4f7de8"></i></div><footer><small>Faltam ${brl.format(Math.max(0, target - current))}</small><button data-contribute-goal="${goal.id}">+ Aportar</button></footer></article>`;
-    }).join('') : emptyState('◎', 'Nenhuma meta ainda', 'Crie uma meta para acompanhar seu progresso.');
+      const linkedCount = paidTransactions().filter((row) => row.goal_id === goal.id).length;
+      return `<article class="entity-card goal-card"><div class="goal-top"><span class="goal-icon">${escapeHTML(goal.icon)}</span><div><button class="entity-menu" data-edit-goal="${goal.id}">✎</button><button class="entity-menu" data-delete-goal-row="${goal.id}">×</button></div></div><h3>${escapeHTML(goal.name)}</h3><p>${goal.due_date ? `Prazo: ${dateBR.format(new Date(`${goal.due_date}T12:00:00`))}` : 'Sem prazo definido'}</p><div class="goal-values"><strong>${brl.format(current)}</strong><span>${Math.round(percent)}%</span></div><div class="progress"><i style="width:${percent}%;background:#4f7de8"></i></div><footer><small>Faltam ${brl.format(Math.max(0, target - current))}${linkedCount ? ` · ${linkedCount} ${linkedCount === 1 ? 'lançamento vinculado' : 'lançamentos vinculados'}` : ''}</small><button data-contribute-goal="${goal.id}">+ Aportar</button></footer></article>`;
+    }).join('') : emptyState('◎', 'Nenhuma meta ainda', 'Crie uma meta e vincule lançamentos para acompanhar o progresso.');
     $$('[data-edit-goal]').forEach((button) => button.addEventListener('click', () => openEntityModal('goal', button.dataset.editGoal)));
     $$('[data-delete-goal-row]').forEach((button) => button.addEventListener('click', () => deleteEntity('goal', button.dataset.deleteGoalRow)));
     $$('[data-contribute-goal]').forEach((button) => button.addEventListener('click', () => contributeGoal(button.dataset.contributeGoal)));
   }
 
   function renderReports() {
-    const totals = totalsForMonth();
-    const now = new Date();
-    const previousDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const selectedKey = reportMonthKey || currentMonthKey();
+    const [selectedYear, selectedMonth] = selectedKey.split('-').map(Number);
+    const selectedDate = new Date(selectedYear, selectedMonth - 1, 1);
+    const selectedLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(selectedDate);
+    const input = $('#report-month');
+    if (input) {
+      input.value = selectedKey;
+      input.max = currentMonthKey();
+    }
+
+    const totals = totalsForMonth(selectedKey);
+    const previousDate = new Date(selectedYear, selectedMonth - 2, 1);
     const previousKey = `${previousDate.getFullYear()}-${String(previousDate.getMonth() + 1).padStart(2, '0')}`;
     const previous = totalsForMonth(previousKey);
     const change = (current, before) => before ? ((current - before) / Math.abs(before)) * 100 : (current ? null : 0);
@@ -716,8 +737,8 @@
       ['Taxa de economia', `${totals.savingsRate.toFixed(1).replace('.', ',')}%`, `${(totals.savingsRate - previous.savingsRate) >= 0 ? '+' : ''}${(totals.savingsRate - previous.savingsRate).toFixed(1).replace('.', ',')} p.p. vs. mês anterior`, totals.savingsRate >= 0 ? 'good' : 'bad']
     ].map(([label, value, detail, cls]) => `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small class="${cls}">${escapeHTML(detail)}</small></article>`).join('');
 
-    const expenses = state.categories.filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
-    $('#report-categories').innerHTML = expenses.slice(0, 7).map((category) => `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${totals.expense ? (category.total / totals.expense * 100).toFixed(1).replace('.', ',') : 0}% das despesas</small></div><b>${brl.format(category.total)}</b></div>`).join('') || emptyState('⌁', 'Sem despesas', 'Registre saídas para gerar a análise.');
+    const expenses = state.categories.filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id, selectedKey) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
+    $('#report-categories').innerHTML = expenses.slice(0, 7).map((category) => `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${totals.expense ? (category.total / totals.expense * 100).toFixed(1).replace('.', ',') : 0}% das despesas</small></div><b>${brl.format(category.total)}</b></div>`).join('') || emptyState('⌁', 'Sem despesas', `Não há saídas realizadas em ${selectedLabel}.`);
 
     $('#report-pro-lock').hidden = hasPro();
     $('#report-pro-details').hidden = !hasPro();
@@ -729,60 +750,66 @@
       return;
     }
 
-    const currentRows = monthTransactions();
+    const currentRows = monthTransactions(selectedKey);
     const expenseRows = currentRows.filter((row) => row.type === 'expense');
     const allRows = state.transactions;
-    const pendingIncomeRows = allRows.filter((row) => row.status === 'pending' && row.type === 'income');
-    const pendingExpenseRows = allRows.filter((row) => row.status === 'pending' && row.type === 'expense');
+    const periodRows = allRows.filter((row) => monthKey(row.transaction_date) === selectedKey);
+    const pendingIncomeRows = periodRows.filter((row) => row.status === 'pending' && row.type === 'income');
+    const pendingExpenseRows = periodRows.filter((row) => row.status === 'pending' && row.type === 'expense');
     const pendingIncome = pendingIncomeRows.reduce((sum, row) => sum + Number(row.amount), 0);
     const pendingExpense = pendingExpenseRows.reduce((sum, row) => sum + Number(row.amount), 0);
-    const recurring = allRows.filter((row) => row.recurring && !row.recurrence_source_id);
+    const selectedMonthEnd = new Date(selectedYear, selectedMonth, 0, 23, 59, 59);
+    const recurring = allRows.filter((row) => row.recurring && !row.recurrence_source_id && new Date(`${row.transaction_date}T12:00:00`) <= selectedMonthEnd);
     const recurringFactor = (row) => row.recurrence_interval === 'weekly' ? 52 / 12 : row.recurrence_interval === 'yearly' ? 1 / 12 : 1;
     const recurringIncome = recurring.filter((row) => row.type === 'income').reduce((sum, row) => sum + Number(row.amount) * recurringFactor(row), 0);
     const recurringExpense = recurring.filter((row) => row.type === 'expense').reduce((sum, row) => sum + Number(row.amount) * recurringFactor(row), 0);
     const biggestExpense = expenseRows.slice().sort((a, b) => Number(b.amount) - Number(a.amount))[0];
-    const daysElapsed = Math.max(1, now.getDate());
-    const averageDailyExpense = totals.expense / daysElapsed;
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const daysElapsed = selectedKey === currentMonthKey() ? Math.max(1, new Date().getDate()) : daysInMonth;
+    const averageDailyExpense = totals.expense / Math.max(1, daysElapsed);
     const averageTicket = currentRows.length ? currentRows.reduce((sum, row) => sum + Number(row.amount), 0) / currentRows.length : 0;
-    const yearSeries = monthSeries(12);
+    const yearSeries = monthSeries(12, selectedKey);
     const monthsWithExpense = yearSeries.filter((item) => item.expense > 0);
     const lastExpenseMonths = monthsWithExpense.slice(-3);
     const averageMonthlyExpense = lastExpenseMonths.length ? lastExpenseMonths.reduce((sum, item) => sum + item.expense, 0) / lastExpenseMonths.length : 0;
-    const runway = averageMonthlyExpense > 0 ? totalBalance() / averageMonthlyExpense : null;
     const bestMonth = yearSeries.slice().sort((a, b) => b.net - a.net)[0];
     const worstMonth = yearSeries.slice().sort((a, b) => a.net - b.net)[0];
-    const budgetRows = state.categories.filter((category) => category.type === 'expense' && Number(category.budget) > 0).map((category) => ({ ...category, spent: categorySpent(category.id), limit: Number(category.budget) })).sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit));
+    const budgetRows = state.categories.filter((category) => category.type === 'expense' && Number(category.budget) > 0).map((category) => ({ ...category, spent: categorySpent(category.id, selectedKey), limit: Number(category.budget) })).sort((a, b) => (b.spent / b.limit) - (a.spent / a.limit));
 
     $('#report-comparison').innerHTML = [
       ['Receita vs. mês anterior', brl.format(totals.income - previous.income), deltaText(totals.income, previous.income)],
       ['Despesa vs. mês anterior', brl.format(totals.expense - previous.expense), deltaText(totals.expense, previous.expense)],
       ['Variação do resultado', brl.format(totals.net - previous.net), deltaText(totals.net, previous.net)],
-      ['Saldo consolidado', brl.format(totalBalance()), runway === null ? 'sem base para estimativa' : `≈ ${runway.toFixed(1).replace('.', ',')} meses de despesas médias`]
+      ['Média de despesas (3m)', brl.format(averageMonthlyExpense), lastExpenseMonths.length ? `${lastExpenseMonths.length} meses com despesas considerados` : 'sem base suficiente']
     ].map(([label, value, detail]) => `<article><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong><small>${escapeHTML(detail)}</small></article>`).join('');
 
     $('#report-health').innerHTML = [
-      ['Lançamentos realizados', String(currentRows.length), 'no mês atual'],
-      ['Ticket médio', brl.format(averageTicket), 'média por lançamento'],
-      ['Gasto médio diário', brl.format(averageDailyExpense), `em ${daysElapsed} dias do mês`],
+      ['Lançamentos realizados', String(currentRows.length), selectedLabel],
+      ['Ticket médio', brl.format(averageTicket), 'média por lançamento realizado'],
+      ['Gasto médio diário', brl.format(averageDailyExpense), `em ${daysElapsed} dias considerados`],
       ['Maior saída', biggestExpense ? brl.format(Number(biggestExpense.amount)) : brl.format(0), biggestExpense?.description || 'sem saídas'],
       ['Melhor mês (12m)', brl.format(bestMonth?.net || 0), bestMonth?.label || '—'],
       ['Pior mês (12m)', brl.format(worstMonth?.net || 0), worstMonth?.label || '—']
     ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${escapeHTML(label)}</span><small>${escapeHTML(detail)}</small></div><strong>${escapeHTML(value)}</strong></div>`).join('');
 
     $('#report-pending').innerHTML = [
-      ['A receber', brl.format(pendingIncome), `${pendingIncomeRows.length} lançamentos`],
-      ['A pagar', brl.format(pendingExpense), `${pendingExpenseRows.length} lançamentos`],
+      ['A receber', brl.format(pendingIncome), `${pendingIncomeRows.length} lançamentos em ${selectedLabel}`],
+      ['A pagar', brl.format(pendingExpense), `${pendingExpenseRows.length} lançamentos em ${selectedLabel}`],
       ['Saldo pendente', brl.format(pendingIncome - pendingExpense), 'impacto líquido se tudo ocorrer']
-    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${label}</span><small>${detail}</small></div><strong>${value}</strong></div>`).join('');
+    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${escapeHTML(label)}</span><small>${escapeHTML(detail)}</small></div><strong>${escapeHTML(value)}</strong></div>`).join('');
 
     $('#report-recurring').innerHTML = [
-      ['Entradas recorrentes', brl.format(recurringIncome), 'equivalência mensal'],
-      ['Saídas recorrentes', brl.format(recurringExpense), 'equivalência mensal'],
-      ['Resultado recorrente', brl.format(recurringIncome - recurringExpense), `${recurring.length} compromissos cadastrados`]
-    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${label}</span><small>${detail}</small></div><strong>${value}</strong></div>`).join('');
+      ['Entradas recorrentes', brl.format(recurringIncome), 'equivalência mensal cadastrada até o período'],
+      ['Saídas recorrentes', brl.format(recurringExpense), 'equivalência mensal cadastrada até o período'],
+      ['Resultado recorrente', brl.format(recurringIncome - recurringExpense), `${recurring.length} compromissos considerados`]
+    ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${escapeHTML(label)}</span><small>${escapeHTML(detail)}</small></div><strong>${escapeHTML(value)}</strong></div>`).join('');
 
-    const balances = state.accounts.filter((account) => !account.archived).map((account) => ({ ...account, balance: accountBalance(account.id) })).sort((a, b) => b.balance - a.balance);
-    $('#report-accounts').innerHTML = balances.map((account) => `<div class="rank-row"><span>${escapeHTML(account.icon)}</span><div><strong>${escapeHTML(account.name)}</strong><small>${escapeHTML(accountTypeLabel(account.type))}</small></div><b>${brl.format(account.balance)}</b></div>`).join('') || emptyState('▣', 'Sem contas', 'Adicione uma conta para analisar a distribuição.');
+    const accountMovements = state.accounts.filter((account) => !account.archived).map((account) => {
+      const rows = currentRows.filter((row) => row.account_id === account.id);
+      const net = rows.reduce((sum, row) => sum + (row.type === 'income' ? Number(row.amount) : -Number(row.amount)), 0);
+      return { ...account, net, count: rows.length };
+    }).filter((account) => account.count > 0).sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
+    $('#report-accounts').innerHTML = accountMovements.map((account) => `<div class="rank-row"><span>${escapeHTML(account.icon)}</span><div><strong>${escapeHTML(account.name)}</strong><small>${account.count} ${account.count === 1 ? 'lançamento' : 'lançamentos'} no mês</small></div><b class="${account.net < 0 ? 'value-expense' : 'value-income'}">${account.net >= 0 ? '+' : '−'} ${brl.format(Math.abs(account.net))}</b></div>`).join('') || emptyState('▣', 'Sem movimentação', `Nenhuma conta teve lançamentos realizados em ${selectedLabel}.`);
 
     $('#report-budget-analysis').innerHTML = budgetRows.slice(0, 7).map((category) => {
       const percent = category.limit ? category.spent / category.limit * 100 : 0;
@@ -792,12 +819,12 @@
     const biggestCategory = expenses[0];
     const budgetOver = budgetRows.filter((row) => row.spent > row.limit);
     const insights = [
-      ['↘', 'Peso das despesas', totals.income ? `As saídas consomem ${(totals.expense / totals.income * 100).toFixed(1).replace('.', ',')}% das receitas deste mês.` : 'Não há receita suficiente no período para medir o peso das despesas.'],
+      ['↘', 'Peso das despesas', totals.income ? `As saídas consomem ${(totals.expense / totals.income * 100).toFixed(1).replace('.', ',')}% das receitas de ${selectedLabel}.` : `Não há receita suficiente em ${selectedLabel} para medir o peso das despesas.`],
       ['◎', 'Taxa de economia', totals.income ? `Você preservou ${totals.savingsRate.toFixed(1).replace('.', ',')}% do que entrou. A comparação com o mês anterior é de ${(totals.savingsRate - previous.savingsRate).toFixed(1).replace('.', ',')} p.p.` : 'Registre receitas para calcular sua taxa de economia.'],
-      ['◈', 'Concentração de gastos', biggestCategory ? `${biggestCategory.name} representa ${(biggestCategory.total / Math.max(1, totals.expense) * 100).toFixed(1).replace('.', ',')}% das despesas do mês.` : 'Não há concentração de despesas calculável neste mês.'],
-      ['◇', 'Pendências', `Há ${brl.format(pendingIncome)} a receber e ${brl.format(pendingExpense)} a pagar em lançamentos pendentes.`],
-      ['↻', 'Base recorrente', `Seus compromissos recorrentes equivalem a ${brl.format(recurringExpense)} em saídas e ${brl.format(recurringIncome)} em entradas por mês.`],
-      ['!', 'Orçamentos', budgetOver.length ? `${budgetOver.length} ${budgetOver.length === 1 ? 'categoria ultrapassou' : 'categorias ultrapassaram'} o limite neste mês.` : 'Nenhum orçamento com limite definido foi ultrapassado neste mês.']
+      ['◈', 'Concentração de gastos', biggestCategory ? `${biggestCategory.name} representa ${(biggestCategory.total / Math.max(1, totals.expense) * 100).toFixed(1).replace('.', ',')}% das despesas do mês selecionado.` : 'Não há concentração de despesas calculável no mês selecionado.'],
+      ['◇', 'Pendências', `Há ${brl.format(pendingIncome)} a receber e ${brl.format(pendingExpense)} a pagar no mês selecionado.`],
+      ['↻', 'Base recorrente', `Até esse período, os compromissos recorrentes equivalem a ${brl.format(recurringExpense)} em saídas e ${brl.format(recurringIncome)} em entradas por mês.`],
+      ['!', 'Orçamentos', budgetOver.length ? `${budgetOver.length} ${budgetOver.length === 1 ? 'categoria ultrapassou' : 'categorias ultrapassaram'} o limite no mês selecionado.` : 'Nenhum orçamento com limite definido foi ultrapassado no mês selecionado.']
     ];
     $('#insights-grid').innerHTML = insights.map(([icon, title, body]) => `<div class="insight"><span>${icon}</span><strong>${escapeHTML(title)}</strong><p>${escapeHTML(body)}</p></div>`).join('');
     renderYearReportChart(yearSeries);
@@ -805,7 +832,7 @@
 
   function renderReportChart() {
     if (!window.Chart) return;
-    const series = monthSeries(6);
+    const series = monthSeries(6, reportMonthKey);
     charts.report?.destroy();
     charts.report = new Chart($('#report-chart'), {
       type: 'line',
@@ -851,11 +878,14 @@
     const transactionType = type || $('input[name="transaction_type"]:checked')?.value || 'expense';
     $('#tx-category').innerHTML = state.categories.filter((category) => category.type === transactionType).map((category) => `<option value="${category.id}">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</option>`).join('');
     $('#tx-account').innerHTML = state.accounts.map((account) => `<option value="${account.id}">${escapeHTML(account.icon)} ${escapeHTML(account.name)}</option>`).join('');
+    const goalSelect = $('#tx-goal');
+    if (goalSelect) goalSelect.innerHTML = `<option value="">Nenhuma meta</option>${state.goals.map((goal) => `<option value="${goal.id}">${escapeHTML(goal.icon)} ${escapeHTML(goal.name)}</option>`).join('')}`;
   }
 
   function renderFeatureLocks() {
     $$('[data-pro-feature]').forEach((button) => button.classList.toggle('locked', !hasPro()));
     $('#tx-recurring').disabled = !hasPro();
+    if ($('#tx-goal-wrap')) $('#tx-goal-wrap').hidden = !hasPro();
   }
 
   function emptyState(icon, title, text) {
@@ -907,6 +937,8 @@
     $('#tx-date').value = row?.transaction_date || isoDate();
     $('#tx-category').value = row?.category_id || $('#tx-category').options[0]?.value || '';
     $('#tx-account').value = row?.account_id || $('#tx-account').options[0]?.value || '';
+    $('#tx-goal').value = row?.goal_id || transactionGoalPreset || '';
+    transactionGoalPreset = null;
     $('#tx-status').value = row?.status || 'paid';
     $('#tx-recurring').checked = Boolean(row?.recurring);
     $('#tx-recurrence').value = row?.recurrence_interval || 'monthly';
@@ -930,6 +962,7 @@
         transaction_date: $('#tx-date').value,
         category_id: $('#tx-category').value,
         account_id: $('#tx-account').value,
+        goal_id: hasPro() ? ($('#tx-goal').value || null) : null,
         status: $('#tx-status').value,
         recurring: $('#tx-recurring').checked,
         recurrence_interval: $('#tx-recurring').checked ? $('#tx-recurrence').value : null,
@@ -999,13 +1032,22 @@
       const row = id ? state.categories.find((item) => item.id === id) : null;
       title.textContent = row ? 'Editar categoria' : 'Nova categoria';
       kicker.textContent = 'Categorias';
-      fields.innerHTML = `<label class="full">Nome<input name="name" maxlength="80" required value="${escapeHTML(row?.name || '')}" placeholder="Ex: Mercado" /></label><label>Tipo<select name="type"><option value="expense">Saída</option><option value="income">Entrada</option></select></label><label>Limite mensal<div class="money-field"><span>R$</span><input name="budget" inputmode="decimal" value="${row ? Number(row.budget || 0).toFixed(2).replace('.', ',') : '0,00'}" /></div></label><label>Ícone<input name="icon" maxlength="8" value="${escapeHTML(row?.icon || '•')}" /></label><label>Cor<input name="color" type="color" value="${escapeHTML(row?.color || '#4f7de8')}" /></label>`;
-      fields.querySelector('[name="type"]').value = row?.type || categoryType;
+      fields.innerHTML = `<label class="full">Nome<input name="name" maxlength="80" required value="${escapeHTML(row?.name || '')}" placeholder="Ex: Mercado" /></label><label>Tipo<select name="type"><option value="expense">Saída</option><option value="income">Entrada</option></select></label><label>Limite mensal<div class="money-field"><span>R$</span><input name="budget" inputmode="decimal" value="${row ? Number(row.budget || 0).toFixed(2).replace('.', ',') : '0,00'}" /></div><small class="field-help">Disponível apenas para categorias de saída.</small></label><label>Ícone<input name="icon" maxlength="8" value="${escapeHTML(row?.icon || '•')}" /></label><label>Cor<input name="color" type="color" value="${escapeHTML(row?.color || '#4f7de8')}" /></label>`;
+      const categoryTypeSelect = fields.querySelector('[name="type"]');
+      categoryTypeSelect.value = row?.type || categoryType;
+      const budgetLabel = fields.querySelector('[name="budget"]')?.closest('label');
+      const syncBudgetVisibility = () => {
+        const expense = categoryTypeSelect.value === 'expense';
+        if (budgetLabel) budgetLabel.hidden = !expense;
+        if (!expense) fields.querySelector('[name="budget"]').value = '0,00';
+      };
+      categoryTypeSelect.addEventListener('change', syncBudgetVisibility);
+      syncBudgetVisibility();
     } else if (mode === 'goal') {
       const row = id ? state.goals.find((item) => item.id === id) : null;
       title.textContent = row ? 'Editar meta' : 'Nova meta';
       kicker.textContent = 'Metas';
-      fields.innerHTML = `<label class="full">Nome<input name="name" maxlength="100" required value="${escapeHTML(row?.name || '')}" placeholder="Ex: Reserva de emergência" /></label><label>Valor alvo<div class="money-field"><span>R$</span><input name="target_amount" inputmode="decimal" required value="${row ? Number(row.target_amount).toFixed(2).replace('.', ',') : ''}" /></div></label><label>Valor atual<div class="money-field"><span>R$</span><input name="current_amount" inputmode="decimal" value="${row ? Number(row.current_amount).toFixed(2).replace('.', ',') : '0,00'}" /></div></label><label>Prazo<input name="due_date" type="date" value="${row?.due_date || ''}" /></label><label>Ícone<input name="icon" maxlength="8" value="${escapeHTML(row?.icon || '◎')}" /></label>`;
+      fields.innerHTML = `<label class="full">Nome<input name="name" maxlength="100" required value="${escapeHTML(row?.name || '')}" placeholder="Ex: Reserva de emergência" /></label><label>Valor alvo<div class="money-field"><span>R$</span><input name="target_amount" inputmode="decimal" required value="${row ? Number(row.target_amount).toFixed(2).replace('.', ',') : ''}" /></div></label><label>Valor já acumulado<div class="money-field"><span>R$</span><input name="current_amount" inputmode="decimal" value="${row ? Number(row.current_amount).toFixed(2).replace('.', ',') : '0,00'}" /></div><small class="field-help">Use aqui somente o valor que já existia antes dos lançamentos vinculados.</small></label><label>Prazo<input name="due_date" type="date" value="${row?.due_date || ''}" /></label><label>Ícone<input name="icon" maxlength="8" value="${escapeHTML(row?.icon || '◎')}" /></label>`;
     }
     openModal('entity-modal');
   }
@@ -1020,7 +1062,7 @@
         const payload = { user_id: state.user.id, name: form.get('name').trim(), type: form.get('type'), opening_balance: parseMoney(form.get('opening_balance')), icon: form.get('icon').trim() || '▣', color: form.get('color') || COLORS[0] };
         await persistEntity('accounts', payload, editingEntityId);
       } else if (entityMode === 'category') {
-        const payload = { user_id: state.user.id, name: form.get('name').trim(), type: form.get('type'), budget: Math.max(0, parseMoney(form.get('budget'))), icon: form.get('icon').trim() || '•', color: form.get('color') || COLORS[1] };
+        const payload = { user_id: state.user.id, name: form.get('name').trim(), type: form.get('type'), budget: form.get('type') === 'expense' ? Math.max(0, parseMoney(form.get('budget'))) : 0, icon: form.get('icon').trim() || '•', color: form.get('color') || COLORS[1] };
         await persistEntity('categories', payload, editingEntityId);
       } else if (entityMode === 'goal') {
         const payload = { user_id: state.user.id, name: form.get('name').trim(), target_amount: parseMoney(form.get('target_amount')), current_amount: Math.max(0, parseMoney(form.get('current_amount'))), due_date: form.get('due_date') || null, icon: form.get('icon').trim() || '◎' };
@@ -1073,36 +1115,30 @@
   async function contributeGoal(id) {
     const goal = state.goals.find((item) => item.id === id);
     if (!goal) return;
-    const raw = prompt(`Quanto deseja adicionar à meta “${goal.name}”?`, '100,00');
-    if (raw === null) return;
-    const value = parseMoney(raw);
-    if (value <= 0) return;
-    const current = Math.min(Number(goal.target_amount), Number(goal.current_amount) + value);
-    try {
-      if (demoMode) goal.current_amount = current;
-      else {
-        const { error } = await supabaseClient.from('goals').update({ current_amount: current }).eq('id', id).eq('user_id', state.user.id);
-        if (error) throw error;
-        await loadFinancialData();
-      }
-      renderAll();
-      toast('Aporte registrado', brl.format(value));
-    } catch (error) {
-      toast('Não foi possível registrar', friendlyError(error), 'error');
+    transactionGoalPreset = id;
+    openTransactionModal();
+    if ($('#transaction-modal').hidden) {
+      transactionGoalPreset = null;
+      return;
     }
+    $('#tx-description').value = `Aporte: ${goal.name}`;
+    $('#tx-goal').value = id;
+    setTimeout(() => $('#tx-amount')?.focus(), 50);
+    toast('Meta vinculada ao lançamento', 'Preencha o valor, a conta e a categoria. O progresso será atualizado quando o lançamento estiver realizado.');
   }
 
-  function exportCSV() {
-    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Data', 'Status', 'Recorrente', 'Valor'], ...state.transactions.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
+  function exportCSV(monthFilter = null) {
+    const source = monthFilter ? state.transactions.filter((row) => monthKey(row.transaction_date) === monthFilter) : state.transactions;
+    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
     const csv = '\uFEFF' + rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `salesboard-lancamentos-${isoDate()}.csv`;
+    anchor.download = monthFilter ? `salesboard-relatorio-${monthFilter}.csv` : `salesboard-lancamentos-${isoDate()}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
-    toast('Exportação concluída', 'Seu arquivo CSV foi preparado.');
+    toast('Exportação concluída', monthFilter ? `O CSV de ${monthFilter} foi preparado.` : 'Seu arquivo CSV foi preparado.');
   }
 
   async function subscribe(plan) {
@@ -1175,7 +1211,19 @@
       if (checkbox) checkbox.checked = Boolean(state.profile?.terms_accepted_at);
     }
     onboardingStep = 1;
+    updateOnboardingTemplatePreview();
     updateOnboardingStep();
+  }
+
+  function updateOnboardingTemplatePreview() {
+    const type = $('input[name="workspace_type"]:checked')?.value || 'personal';
+    const templates = {
+      personal: ['🏠 Moradia', '🛒 Alimentação', '🚗 Transporte', '❤️ Saúde', '🎮 Lazer', '💡 Serviços', '💼 Salário', '💰 Renda extra'],
+      freelancer: ['🧰 Ferramentas', '🧾 Impostos', '📣 Marketing', '🚗 Transporte', '💡 Serviços', '• Outras despesas', '💼 Clientes', '💰 Outras receitas'],
+      business: ['📦 Fornecedores', '⚙️ Operação', '📣 Marketing', '🧾 Impostos', '💡 Serviços', '• Outras despesas', '💼 Vendas e serviços', '💰 Outras receitas']
+    };
+    const preview = $('#seed-preview');
+    if (preview) preview.innerHTML = templates[type].map((item) => `<span>${escapeHTML(item)}</span>`).join('');
   }
 
   function updateOnboardingStep() {
@@ -1196,38 +1244,22 @@
       if (needsTerms && !$('#oauth-accept-terms')?.checked) throw new Error('Aceite os Termos de Uso e a Política de Privacidade para continuar.');
       const workspaceType = $('input[name="workspace_type"]:checked').value;
       const workspaceName = $('#workspace-name-input').value.trim() || 'Meu espaço';
-      const account = {
-        user_id: state.user.id,
-        name: $('#first-account-name').value.trim() || 'Conta principal',
-        type: $('#first-account-type').value,
-        opening_balance: parseMoney($('#first-account-balance').value),
-        icon: '▣',
-        color: '#34d399'
-      };
-      const budgets = $('#create-default-budgets').checked;
-      const categories = [
-        ['Moradia', 'expense', '🏠', '#8b5cf6', budgets ? 1600 : 0],
-        ['Alimentação', 'expense', '🛒', '#34d399', budgets ? 1100 : 0],
-        ['Transporte', 'expense', '🚗', '#4f7de8', budgets ? 700 : 0],
-        ['Serviços', 'expense', '💡', '#f59e0b', budgets ? 500 : 0],
-        ['Saúde', 'expense', '❤️', '#ec4899', budgets ? 450 : 0],
-        ['Lazer', 'expense', '🎮', '#e65b67', budgets ? 450 : 0],
-        ['Trabalho', 'income', '💼', '#34d399', 0],
-        ['Outras entradas', 'income', '💰', '#4f7de8', 0]
-      ].map(([name, type, icon, color, budget]) => ({ user_id: state.user.id, name, type, icon, color, budget }));
-
-      const { error: accountError } = await supabaseClient.from('accounts').insert(account);
-      if (accountError) throw accountError;
-      const { error: categoryError } = await supabaseClient.from('categories').insert(categories);
-      if (categoryError) throw categoryError;
-      const profilePayload = { workspace_type: workspaceType, workspace_name: workspaceName, onboarded: true };
-      if (!state.profile?.terms_accepted_at) { profilePayload.terms_accepted_at = new Date().toISOString(); profilePayload.terms_version = '2026-08-12'; }
-      const { data: profile, error: profileError } = await supabaseClient.from('profiles').update(profilePayload).eq('id', state.user.id).select().single();
+      const { error } = await supabaseClient.rpc('complete_salesboard_onboarding', {
+        p_workspace_type: workspaceType,
+        p_workspace_name: workspaceName,
+        p_account_name: $('#first-account-name').value.trim() || 'Conta principal',
+        p_account_type: $('#first-account-type').value,
+        p_opening_balance: parseMoney($('#first-account-balance').value),
+        p_create_budgets: false,
+        p_accept_terms: needsTerms ? Boolean($('#oauth-accept-terms')?.checked) : false
+      });
+      if (error) throw error;
+      const { data: profile, error: profileError } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).single();
       if (profileError) throw profileError;
       state.profile = profile;
       await loadFinancialData();
       enterApp();
-      toast('Seu espaço está pronto', 'Agora registre sua primeira movimentação.');
+      toast('Seu espaço está pronto', 'Agora registre sua primeira movimentação e defina seus próprios limites quando quiser.');
     } catch (error) {
       toast('Não foi possível concluir', friendlyError(error), 'error');
     } finally {
@@ -1240,13 +1272,12 @@
     if (demoMode) {
       state.profile.full_name = $('#settings-name').value.trim();
       state.profile.workspace_name = $('#settings-workspace').value.trim();
-      state.profile.workspace_type = $('#settings-type').value;
       renderIdentity();
       toast('Configurações atualizadas na demonstração');
       return;
     }
     try {
-      const payload = { full_name: $('#settings-name').value.trim(), workspace_name: $('#settings-workspace').value.trim(), workspace_type: $('#settings-type').value, currency: $('#settings-currency').value };
+      const payload = { full_name: $('#settings-name').value.trim(), workspace_name: $('#settings-workspace').value.trim() };
       const { data, error } = await supabaseClient.from('profiles').update(payload).eq('id', state.user.id).select().single();
       if (error) throw error;
       state.profile = data;
@@ -1500,6 +1531,7 @@
     $$('.modal').forEach((modal) => modal.addEventListener('click', (event) => { if (event.target === modal) closeModals(); }));
     $('#transaction-form').addEventListener('submit', saveTransaction);
     $$('input[name="transaction_type"]').forEach((radio) => radio.addEventListener('change', () => renderSelectOptions(radio.value)));
+    $$('input[name="workspace_type"]').forEach((radio) => radio.addEventListener('change', updateOnboardingTemplatePreview));
     $('#tx-recurring').addEventListener('change', () => { $('#recurrence-wrap').hidden = !$('#tx-recurring').checked; });
     $('#entity-form').addEventListener('submit', saveEntity);
     $('#add-account').addEventListener('click', () => openEntityModal('account'));
@@ -1508,8 +1540,9 @@
     $$('.category-tabs [data-category-type]').forEach((button) => button.addEventListener('click', () => { categoryType = button.dataset.categoryType; renderCategories(); }));
     $$('#transaction-filters [data-filter]').forEach((button) => button.addEventListener('click', () => { transactionFilter = button.dataset.filter; $$('#transaction-filters button').forEach((item) => item.classList.toggle('active', item === button)); renderTransactions(); }));
     $('#transaction-search').addEventListener('input', renderTransactions);
+    $('#report-month').addEventListener('change', (event) => { reportMonthKey = event.target.value || currentMonthKey(); renderReports(); });
     $('#export-csv').addEventListener('click', exportCSV);
-    $('#reports-export').addEventListener('click', exportCSV);
+    $('#reports-export').addEventListener('click', () => exportCSV(reportMonthKey));
     $('#settings-export').addEventListener('click', exportCSV);
     $('#paywall-export').addEventListener('click', exportCSV);
     $('#profile-form').addEventListener('submit', saveProfile);
