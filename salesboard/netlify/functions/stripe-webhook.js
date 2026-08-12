@@ -29,12 +29,25 @@ async function userIdForCustomer(admin, customerId) {
   return data?.id || null;
 }
 
+async function profileExists(admin, userId) {
+  if (!userId) return false;
+  const { data, error } = await admin.from('profiles').select('id').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
 async function syncSubscription(admin, subscription) {
   const item = subscription.items?.data?.[0];
   const priceId = item?.price?.id || null;
   const mapped = priceMapping(priceId);
   const userId = subscription.metadata?.salesboard_user_id || await userIdForCustomer(admin, subscription.customer);
-  if (!userId) throw new Error(`Usuário não localizado para assinatura ${subscription.id}.`);
+
+  // An account can be deleted before Stripe delivers its final cancellation event.
+  // In that case the event is valid, but there is intentionally no local user to update.
+  if (!userId || !(await profileExists(admin, userId))) {
+    console.log(`Ignoring subscription ${subscription.id}: local account no longer exists.`);
+    return { skipped: true };
+  }
 
   const plan = subscription.metadata?.salesboard_plan || mapped?.plan || 'pro';
   const billingCycle = subscription.metadata?.billing_cycle || mapped?.billingCycle || 'monthly';
@@ -55,13 +68,13 @@ async function syncSubscription(admin, subscription) {
   }, { onConflict: 'user_id' });
   if (subscriptionError) throw subscriptionError;
 
-  const profileStatus = normalizedStatus === 'canceled' ? 'canceled' : normalizedStatus;
   const { error: profileError } = await admin.from('profiles').update({
     stripe_customer_id: String(subscription.customer),
     plan: plan === 'essential' ? 'essential' : 'pro',
-    subscription_status: profileStatus
+    subscription_status: normalizedStatus
   }).eq('id', userId);
   if (profileError) throw profileError;
+  return { skipped: false };
 }
 
 exports.handler = async (event) => {
@@ -99,7 +112,7 @@ exports.handler = async (event) => {
       case 'checkout.session.completed': {
         const session = stripeEvent.data.object;
         const userId = session.metadata?.salesboard_user_id || session.client_reference_id;
-        if (userId && session.customer) {
+        if (userId && session.customer && await profileExists(admin, userId)) {
           await admin.from('profiles').update({ stripe_customer_id: String(session.customer) }).eq('id', userId);
         }
         if (session.subscription) {
@@ -110,14 +123,13 @@ exports.handler = async (event) => {
       }
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-      case 'customer.subscription.deleted': {
+      case 'customer.subscription.deleted':
         await syncSubscription(admin, stripeEvent.data.object);
         break;
-      }
       case 'invoice.payment_failed': {
         const invoice = stripeEvent.data.object;
         const userId = await userIdForCustomer(admin, invoice.customer);
-        if (userId) {
+        if (userId && await profileExists(admin, userId)) {
           await admin.from('profiles').update({ subscription_status: 'past_due' }).eq('id', userId);
           await admin.from('subscriptions').update({ status: 'past_due' }).eq('user_id', userId);
         }
