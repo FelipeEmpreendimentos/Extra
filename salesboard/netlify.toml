@@ -1,8 +1,9 @@
 [build]
-  publish = "."
-  functions = "netlify/functions"
+  command = "rm -rf .dist && mkdir -p .dist && cp index.html styles.css launch.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .dist/ && cp -R app legal .dist/"
+  publish = ".dist"
 
 [functions]
+  directory = "netlify/functions"
   node_bundler = "esbuild"
 
 [[redirects]]
