@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.netlify/
+.dist/
+.pages-dist/
+.ci-dist/
+.DS_Store
+npm-debug.log*
