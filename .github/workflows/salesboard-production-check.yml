@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Check launch files
         run: |
@@ -44,6 +44,7 @@ jobs:
           test -f salesboard/legal/legal.js
           test -f salesboard/supabase/schema.sql
           test -f salesboard/supabase/002_integrity.sql
+          test -f salesboard/supabase/003_recurring.sql
           test -f salesboard/netlify/functions/_shared.js
           test -f salesboard/netlify/functions/public-config.js
           test -f salesboard/netlify/functions/create-checkout-session.js
@@ -51,6 +52,7 @@ jobs:
           test -f salesboard/netlify/functions/stripe-webhook.js
           test -f salesboard/netlify/functions/delete-account.js
           test -f salesboard/netlify/functions/health.js
+          test -f salesboard/netlify/functions/process-recurring.mjs
           test -f salesboard/netlify.toml
           test -f salesboard/.env.example
 
@@ -66,18 +68,22 @@ jobs:
           node --check salesboard/netlify/functions/stripe-webhook.js
           node --check salesboard/netlify/functions/delete-account.js
           node --check salesboard/netlify/functions/health.js
+          node --check salesboard/netlify/functions/process-recurring.mjs
 
       - name: Check production security invariants
         run: |
           grep -Fq 'enable row level security' salesboard/supabase/schema.sql
           grep -Fq 'current_entitlement' salesboard/supabase/schema.sql
           grep -Fq 'validate_transaction_references' salesboard/supabase/002_integrity.sql
+          grep -Fq 'validate_recurrence_source' salesboard/supabase/003_recurring.sql
           grep -Fq 'constructEvent' salesboard/netlify/functions/stripe-webhook.js
           grep -Fq 'verifyUser' salesboard/netlify/functions/create-checkout-session.js
           grep -Fq 'SUPABASE_SECRET_KEY' salesboard/netlify/functions/_shared.js
           grep -Fq 'STRIPE_PRICE_PRO_MONTHLY' salesboard/netlify/functions/create-checkout-session.js
+          grep -Fq "schedule: '0 8 * * *'" salesboard/netlify/functions/process-recurring.mjs
           grep -Fq 'Content-Security-Policy' salesboard/netlify.toml
           grep -Fq '/api/health' salesboard/netlify.toml
+          grep -Fq 'publish = ".dist"' salesboard/netlify.toml
           if grep -Fq 'localStorage' salesboard/app/app.js; then
             echo 'Production app must not use localStorage as a financial database'
             exit 1
@@ -86,6 +92,21 @@ jobs:
             echo 'Possible Stripe secret committed'
             exit 1
           fi
+
+      - name: Build clean static artifact
+        working-directory: salesboard
+        run: |
+          rm -rf .ci-dist
+          mkdir -p .ci-dist
+          cp index.html styles.css launch.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .ci-dist/
+          cp -R app legal .ci-dist/
+          test -f .ci-dist/index.html
+          test -f .ci-dist/app/index.html
+          test -f .ci-dist/legal/privacidade.html
+          test ! -e .ci-dist/netlify
+          test ! -e .ci-dist/supabase
+          test ! -e .ci-dist/.env.example
+          test ! -e .ci-dist/package.json
 
       - name: Check launch transparency and legal flows
         run: |
