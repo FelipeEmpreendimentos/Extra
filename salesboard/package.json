@@ -1,8 +1,8 @@
 {
-  "name": "salesboard-mvp",
-  "version": "1.0.0",
+  "name": "salesboard-finance",
+  "version": "2.0.0",
   "private": true,
-  "description": "Dashboard de vendas com assinatura mensal personalizável.",
+  "description": "SaaS responsivo de controle financeiro com dashboard, categorias, metas, orçamentos, relatórios e assinatura recorrente.",
   "scripts": {
     "dev": "netlify dev"
   },
