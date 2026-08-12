@@ -47,7 +47,7 @@ A raiz `https://felipeempreendimentos.github.io/Extra/` redireciona para o Sales
 - lançamentos recorrentes Pro;
 - relatórios essenciais no Essencial e relatórios avançados de 12 meses no Pro;
 - exportação CSV;
-- trial Pro de 3 dias sem cartão;
+- trial Pro de 3 dias sem cartão, contado a partir da criação da conta;
 - paywall após expiração;
 - limite de 3 contas no Essencial aplicado também no banco;
 - Stripe Checkout autenticado;
@@ -57,6 +57,28 @@ A raiz `https://felipeempreendimentos.github.io/Extra/` redireciona para o Sales
 - RLS por usuário e validações de integridade;
 - páginas de Termos, Privacidade e Segurança;
 - CI e deploy automático pelo GitHub Actions.
+
+## Matriz de planos
+
+O trial de 3 dias entrega **todas as permissões do Pro**. A demonstração pública também roda como **Pro ativo**, para mostrar a melhor versão do produto.
+
+| Recurso | Essencial | Pro |
+|---|---|---|
+| Lançamentos | Ilimitados | Ilimitados |
+| Contas ativas | Até 3 | Ilimitadas |
+| Categorias personalizadas | Sim | Sim |
+| Orçamentos mensais | Sim | Sim |
+| Dashboard financeiro | Sim | Sim |
+| Relatórios essenciais | Sim | Sim |
+| Relatórios avançados de 12 meses | Não | Sim |
+| Comparações e diagnósticos | Não | Sim |
+| Pendências e análise de recorrências | Não | Sim |
+| Metas financeiras | Não | Sim |
+| Lançamentos recorrentes | Não | Sim |
+| Busca e filtros | Sim | Sim |
+| Exportação CSV | Sim | Sim |
+
+Os limites críticos são reforçados no PostgreSQL, e não apenas escondidos pela interface.
 
 ## Supabase de produção
 
@@ -125,6 +147,12 @@ No Supabase Auth, mantenha confirmação de e-mail habilitada e autorize o ender
 
 `https://felipeempreendimentos.github.io/Extra/salesboard/app/`
 
+O frontend já chama `signInWithOAuth({ provider: 'google' })`. Para o botão Google funcionar de verdade, habilite o provedor Google no Supabase Auth com um Client ID e Client Secret do Google Cloud. No Google, o callback autorizado do projeto Supabase deve apontar para:
+
+`https://azjabgqvkkctgzqacpue.supabase.co/auth/v1/callback`
+
+Usuários criados por OAuth que ainda não tenham aceite registrado precisam aceitar Termos e Privacidade durante o onboarding.
+
 Quando houver domínio próprio, adicione o novo domínio antes de remover a URL do Pages.
 
 ## Recorrências
@@ -144,16 +172,17 @@ Não abra cobrança real antes de concluir estes itens:
 1. configurar os segredos acima;
 2. configurar o Customer Portal;
 3. configurar redirects do Supabase Auth;
-4. testar cadastro → onboarding → CRUD financeiro;
-5. testar dois usuários e confirmar isolamento de dados;
-6. testar checkout em modo teste;
-7. confirmar atualização da assinatura pelo webhook;
-8. testar falha de pagamento e cancelamento;
-9. testar exclusão de conta com assinatura;
-10. preencher identidade legal e canais de suporte/privacidade;
-11. criar os quatro Prices em **live mode** e trocar os IDs das Edge Functions para os Prices live;
-12. usar `sk_live_...` e webhook live somente depois do smoke test completo;
-13. revisar os textos legais para a operação real.
+4. ativar e testar o provedor Google OAuth;
+5. testar cadastro → onboarding → CRUD financeiro;
+6. testar dois usuários e confirmar isolamento de dados;
+7. testar checkout em modo teste;
+8. confirmar atualização da assinatura pelo webhook;
+9. testar falha de pagamento e cancelamento;
+10. testar exclusão de conta com assinatura;
+11. preencher identidade legal e canais de suporte/privacidade;
+12. criar os quatro Prices em **live mode** e trocar os IDs das Edge Functions para os Prices live;
+13. usar `sk_live_...` e webhook live somente depois do smoke test completo;
+14. revisar os textos legais para a operação real.
 
 ## Marca
 
