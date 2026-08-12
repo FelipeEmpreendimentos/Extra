@@ -1,0 +1,43 @@
+/* SalesBoard Finance — cross-device quality hardening */
+
+/* Keep touch/click targets comfortable without visually inflating the UI. */
+.text-button,.link-button{min-height:36px;padding:7px 5px;display:inline-flex;align-items:center;justify-content:center}
+.segmented button{min-height:36px;padding:8px 12px}
+.entity-menu{width:36px;height:36px;display:inline-grid;place-items:center;border-radius:9px;padding:0;margin:-4px 0;background:transparent}
+.entity-menu:hover{background:#f2f5f7;color:#172130}
+.goal-card footer button{min-height:36px;padding:8px 11px}
+.search-field{min-height:40px}
+.search-field input{min-height:32px}
+.billing-cycle .segmented button{min-height:36px}
+.trial-card button{min-height:36px;padding:8px 4px}
+.toast button{width:32px;height:32px;display:grid;place-items:center;margin:-5px -7px -5px 0}
+
+/* Safer flex/grid shrink behavior for very narrow and very wide viewports. */
+.main-area,.content,.view,.panel,.entity-card,.current-plan>div:first-child{min-width:0}
+.panel-head>*{min-width:0}
+.page-head h1,.panel-head strong,.current-plan h2{overflow-wrap:anywhere}
+canvas{max-width:100%!important}
+
+@media(max-width:680px){
+  .page-actions{width:100%}
+  .page-actions>.button{min-height:42px}
+  .toolbar{min-width:0}
+  .toolbar .search-field{min-width:0;width:100%}
+  .toolbar .search-field input{min-width:0;width:100%}
+  .panel-head{min-width:0}
+  .current-plan>div:last-child{white-space:normal}
+}
+
+@media(max-width:360px){
+  .content{padding-left:12px;padding-right:12px}
+  .topbar{padding-left:10px;padding-right:10px}
+  .topbar-right{gap:5px}
+  .page-head h1{font-size:23px}
+  .summary-card{padding:13px}
+  .panel{padding:13px}
+  .panel-head{gap:8px}
+  .donut-layout{min-width:0}
+  .legend-row{grid-template-columns:10px minmax(0,1fr) auto}
+  .budget-item header{gap:8px}
+  .budget-item header>*{min-width:0}
+}
