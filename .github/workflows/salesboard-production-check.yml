@@ -23,6 +23,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Use production Node version
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: "salesboard/.node-version"
+
       - name: Check launch files
         run: |
           test -f salesboard/index.html
@@ -55,20 +60,20 @@ jobs:
           test -f salesboard/netlify/functions/process-recurring.mjs
           test -f salesboard/netlify.toml
           test -f salesboard/.env.example
+          test -f salesboard/.gitignore
+          test -f salesboard/.node-version
+
+      - name: Install pinned dependencies
+        working-directory: salesboard
+        run: npm install --ignore-scripts --no-fund --no-audit
 
       - name: Validate JavaScript syntax
-        run: |
-          node --check salesboard/app.js
-          node --check salesboard/app/app.js
-          node --check salesboard/legal/legal.js
-          node --check salesboard/netlify/functions/_shared.js
-          node --check salesboard/netlify/functions/public-config.js
-          node --check salesboard/netlify/functions/create-checkout-session.js
-          node --check salesboard/netlify/functions/create-billing-portal.js
-          node --check salesboard/netlify/functions/stripe-webhook.js
-          node --check salesboard/netlify/functions/delete-account.js
-          node --check salesboard/netlify/functions/health.js
-          node --check salesboard/netlify/functions/process-recurring.mjs
+        working-directory: salesboard
+        run: npm run check
+
+      - name: Audit production dependencies
+        working-directory: salesboard
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Check production security invariants
         run: |
@@ -84,6 +89,9 @@ jobs:
           grep -Fq 'Content-Security-Policy' salesboard/netlify.toml
           grep -Fq '/api/health' salesboard/netlify.toml
           grep -Fq 'publish = ".dist"' salesboard/netlify.toml
+          grep -Fq '@supabase/supabase-js": "2.111.0"' salesboard/package.json
+          grep -Fq 'netlify-cli": "27.0.1"' salesboard/package.json
+          grep -Fxq '24' salesboard/.node-version
           if grep -Fq 'localStorage' salesboard/app/app.js; then
             echo 'Production app must not use localStorage as a financial database'
             exit 1
@@ -92,6 +100,24 @@ jobs:
             echo 'Possible Stripe secret committed'
             exit 1
           fi
+
+      - name: Verify CSP hash for JSON-LD
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const html = fs.readFileSync('salesboard/index.html', 'utf8');
+          const toml = fs.readFileSync('salesboard/netlify.toml', 'utf8');
+          const match = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
+          if (!match) throw new Error('JSON-LD block not found');
+          const hash = crypto.createHash('sha256').update(match[1]).digest('base64');
+          const token = `'sha256-${hash}'`;
+          if (!toml.includes(token)) {
+            console.error(`CSP is missing the exact JSON-LD hash: ${token}`);
+            process.exit(1);
+          }
+          console.log(`CSP JSON-LD hash verified: ${token}`);
+          NODE
 
       - name: Build clean static artifact
         working-directory: salesboard
