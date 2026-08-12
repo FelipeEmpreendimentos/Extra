@@ -1,14 +1,12 @@
-# SalesBoard Finance v3
+# SalesBoard Finance v3.1
 
 SaaS responsivo de controle financeiro para pessoas, autônomos e pequenos negócios.
 
-## Arquitetura atual
-
-A versão publicada usa:
+## Arquitetura de produção
 
 ```text
 GitHub Pages
-  ├─ landing
+  ├─ landing comercial
   └─ aplicativo web
        ├─ Supabase Auth
        ├─ PostgreSQL + RLS
@@ -20,47 +18,31 @@ GitHub Pages
             └─ webhook Stripe
 
 PostgreSQL / pg_cron
-  └─ gera ocorrências de lançamentos recorrentes Pro diariamente
+  └─ gera ocorrências de lançamentos recorrentes Pro
 ```
 
-O GitHub Pages serve somente arquivos públicos. Nenhuma chave administrativa ou chave secreta do Stripe é enviada ao navegador. `app/runtime-bridge.js` fornece a configuração pública do Supabase e direciona as antigas rotas `/api/*` do frontend para as Edge Functions do projeto.
+O navegador recebe somente configuração pública. Chaves administrativas, Stripe Secret Key e webhook secret ficam no ambiente server-side do Supabase.
 
-## URL pública
+## URLs
 
-`https://felipeempreendimentos.github.io/Extra/salesboard/`
+- Landing: `https://felipeempreendimentos.github.io/Extra/salesboard/`
+- Aplicativo: `https://felipeempreendimentos.github.io/Extra/salesboard/app/`
+- Supabase project ref: `azjabgqvkkctgzqacpue`
 
-A raiz `https://felipeempreendimentos.github.io/Extra/` redireciona para o SalesBoard.
+## Fluxo de aquisição e trial
 
-## O que já está implementado
+1. usuário cria a conta por e-mail ou Google;
+2. entra em uma tela de seleção de experiência;
+3. escolhe **Essencial** ou **Pro** para testar;
+4. somente nesse clique começam 72 horas completas;
+5. onboarding cria conta/categorias iniciais de forma atômica;
+6. durante o trial valem exatamente as permissões do plano escolhido;
+7. terminado o período, os dados são preservados e a tela de continuidade oferece assinatura;
+8. o mesmo e-mail pode iniciar somente um trial, mesmo que a conta seja excluída depois.
 
-- landing comercial responsiva;
-- cadastro e login reais via Supabase Auth;
-- login com Google via Supabase Auth (frontend pronto; requer credenciais Google no provedor);
-- confirmação de e-mail e recuperação de senha;
-- onboarding;
-- dashboard financeiro;
-- entradas e saídas;
-- contas;
-- categorias personalizadas;
-- orçamentos;
-- metas Pro;
-- lançamentos recorrentes Pro;
-- relatórios essenciais no Essencial e relatórios avançados de 12 meses no Pro;
-- exportação CSV;
-- trial Pro de 3 dias sem cartão, contado a partir da criação da conta;
-- paywall após expiração;
-- limite de 3 contas no Essencial aplicado também no banco;
-- Stripe Checkout autenticado;
-- Stripe Customer Portal;
-- webhook idempotente e com verificação de assinatura;
-- exclusão de conta com cancelamento da assinatura;
-- RLS por usuário e validações de integridade;
-- páginas de Termos, Privacidade e Segurança;
-- CI e deploy automático pelo GitHub Actions.
+A demonstração pública continua como **Pro completo** para apresentar a melhor versão do produto.
 
-## Matriz de planos
-
-O trial de 3 dias entrega **todas as permissões do Pro**. A demonstração pública também roda como **Pro ativo**, para mostrar a melhor versão do produto.
+## Planos
 
 | Recurso | Essencial | Pro |
 |---|---|---|
@@ -72,7 +54,6 @@ O trial de 3 dias entrega **todas as permissões do Pro**. A demonstração púb
 | Relatórios essenciais | Sim | Sim |
 | Relatórios avançados de 12 meses | Não | Sim |
 | Comparações e diagnósticos | Não | Sim |
-| Pendências e análise de recorrências | Não | Sim |
 | Metas financeiras | Não | Sim |
 | Lançamentos recorrentes | Não | Sim |
 | Busca e filtros | Sim | Sim |
@@ -80,120 +61,83 @@ O trial de 3 dias entrega **todas as permissões do Pro**. A demonstração púb
 
 Os limites críticos são reforçados no PostgreSQL, e não apenas escondidos pela interface.
 
-## Supabase de produção
+## Recursos principais
 
-Project ref:
+- Supabase Auth com e-mail/senha, confirmação, recuperação e Google OAuth;
+- onboarding transacional;
+- dashboard, entradas, saídas, contas e categorias;
+- orçamentos e metas;
+- recorrências Pro;
+- relatórios essenciais/avançados conforme entitlement;
+- exportação CSV;
+- pesquisa e filtros;
+- trial único por e-mail;
+- paywall de continuidade;
+- Stripe Checkout e Customer Portal autenticados;
+- webhook idempotente com assinatura Stripe;
+- exclusão de conta com cancelamento da assinatura;
+- RLS por usuário e validações de integridade;
+- Termos, Privacidade e Segurança;
+- auditoria automatizada de responsividade e CI de produção.
 
-`azjabgqvkkctgzqacpue`
+## Responsividade
 
-O banco já possui as tabelas, RLS, guards de integridade, suporte a recorrência e job `salesboard-recurring-daily` ativo no `pg_cron` às `08:15 UTC`.
+O frontend é auditado automaticamente em uma matriz que inclui:
 
-As Edge Functions implantadas são:
+`320x568`, `360x800`, `375x812`, `390x844`, `412x915`, `430x932`, `768x1024`, `820x1180`, `1024x768`, `1280x720`, `1366x768`, `1440x900`, `1536x864`, `1920x1080` e `2560x1440`.
 
-- `salesboard-health`
-- `salesboard-checkout`
-- `salesboard-billing-portal`
-- `salesboard-delete-account`
-- `salesboard-stripe-webhook`
+O teste percorre landing, dashboard, lançamentos, contas, orçamentos, metas, relatórios, cobrança, configurações e modais, verificando overflow, clipping, erros de JavaScript/rede e alvos interativos.
 
 ## Stripe
 
-A integração está preparada em **modo teste**. Produtos e Prices de teste existentes:
+O código suporta separação TEST/LIVE.
 
-| Plano | Mensal | Anual |
-|---|---:|---:|
-| Essencial | R$ 14,90 | R$ 149,00 |
-| Pro | R$ 24,90 | R$ 249,00 |
+Em TEST mode, existem preços de referência do projeto. Em LIVE mode, os IDs devem ser fornecidos por secrets do Supabase; o código não reutiliza automaticamente catálogo de teste com uma chave live.
 
-O webhook de teste aponta para:
-
-`https://azjabgqvkkctgzqacpue.supabase.co/functions/v1/salesboard-stripe-webhook`
-
-Eventos utilizados:
-
-- `checkout.session.completed`
-- `customer.subscription.created`
-- `customer.subscription.updated`
-- `customer.subscription.deleted`
-- `invoice.paid`
-- `invoice.payment_failed`
-
-## Segredos obrigatórios no Supabase
-
-Antes de testar cobrança, abra **Supabase → Edge Functions → Secrets** e configure:
+Secrets necessários:
 
 ```text
 STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
+STRIPE_PRICE_ESSENTIAL_MONTHLY
+STRIPE_PRICE_ESSENTIAL_ANNUAL
+STRIPE_PRICE_PRO_MONTHLY
+STRIPE_PRICE_PRO_ANNUAL
+STRIPE_PRODUCT_ESSENTIAL
+STRIPE_PRODUCT_PRO
 LEGAL_ENTITY_NAME
 LEGAL_ENTITY_ID
 SUPPORT_EMAIL
 PRIVACY_EMAIL
 ```
 
-`STRIPE_SECRET_KEY` deve corresponder ao mesmo modo dos Prices usados pelas Functions. Atualmente os IDs configurados são de **teste**, portanto use uma `sk_test_...` para o smoke test.
+## Estado de lançamento
 
-O signing secret deve ser o segredo do webhook `salesboard-stripe-webhook` criado no mesmo ambiente Stripe.
+O software e a infraestrutura de código podem ser validados pelo CI, mas **cobrança real não deve ser aberta enquanto o health check de produção estiver em `configuration_required`**.
 
-Não coloque nenhum desses valores no GitHub ou em arquivos JavaScript públicos.
+Antes de aceitar clientes pagantes:
 
-## Customer Portal
-
-O Stripe Customer Portal precisa ser ativado/configurado no Dashboard antes do smoke test de gerenciamento de assinatura. Configure cancelamento no fim do período, atualização de método de pagamento e histórico de cobrança conforme a política comercial.
-
-## Auth
-
-No Supabase Auth, mantenha confirmação de e-mail habilitada e autorize o endereço do app como redirect URL:
-
-`https://felipeempreendimentos.github.io/Extra/salesboard/app/`
-
-O frontend já chama `signInWithOAuth({ provider: 'google' })`. Para o botão Google funcionar de verdade, habilite o provedor Google no Supabase Auth com um Client ID e Client Secret do Google Cloud. No Google, o callback autorizado do projeto Supabase deve apontar para:
-
-`https://azjabgqvkkctgzqacpue.supabase.co/auth/v1/callback`
-
-Usuários criados por OAuth que ainda não tenham aceite registrado precisam aceitar Termos e Privacidade durante o onboarding.
-
-Quando houver domínio próprio, adicione o novo domínio antes de remover a URL do Pages.
-
-## Recorrências
-
-A função PostgreSQL `public.process_salesboard_recurring_transactions()` é chamada diariamente pelo job `salesboard-recurring-daily`.
-
-- trial válido recebe recursos Pro;
-- plano Pro ativo recebe recorrências;
-- Essencial não recebe geração automática;
-- ocorrências geradas começam como `pending`;
-- índice único impede duplicação por origem/data.
-
-## Critério de lançamento
-
-Não abra cobrança real antes de concluir estes itens:
-
-1. configurar os segredos acima;
-2. configurar o Customer Portal;
-3. configurar redirects do Supabase Auth;
-4. ativar e testar o provedor Google OAuth;
-5. testar cadastro → onboarding → CRUD financeiro;
-6. testar dois usuários e confirmar isolamento de dados;
-7. testar checkout em modo teste;
-8. confirmar atualização da assinatura pelo webhook;
-9. testar falha de pagamento e cancelamento;
-10. testar exclusão de conta com assinatura;
-11. preencher identidade legal e canais de suporte/privacidade;
-12. criar os quatro Prices em **live mode** e trocar os IDs das Edge Functions para os Prices live;
-13. usar `sk_live_...` e webhook live somente depois do smoke test completo;
-14. revisar os textos legais para a operação real.
-
-## Marca
-
-`SalesBoard Finance` deve ser tratado como nome de trabalho até a validação de marca. Antes de investir em domínio e tráfego, faça pesquisa de anterioridade/registrabilidade no INPI.
+1. preencher identidade legal e canais de suporte/privacidade;
+2. criar os Products/Prices no Stripe **LIVE mode**;
+3. configurar `sk_live_...` e os seis IDs live nos Supabase Secrets;
+4. criar o webhook live e configurar `STRIPE_WEBHOOK_SECRET`;
+5. confirmar que `salesboard-health` retorna `ready`;
+6. executar checkout real controlado e confirmar atualização via webhook;
+7. validar portal, troca de plano, falha de pagamento e cancelamento;
+8. testar exclusão de uma conta com assinatura;
+9. revisar novamente textos legais para a identidade real da operação.
 
 ## Segurança
 
-- chave publishable do Supabase pode ficar no navegador; RLS protege os dados;
-- chaves administrativas e Stripe ficam apenas no Supabase Edge Functions Secrets;
-- webhook verifica assinatura Stripe;
-- billing fields são server-managed;
-- referências conta/categoria/recorrência são validadas no banco;
-- o app comercial não usa `localStorage` como banco financeiro;
-- o repositório é público: para um produto proprietário, considere migrar a base de produção para um repositório privado antes de ampliar a equipe ou adicionar código proprietário sensível.
+- RLS ativo nas tabelas de usuário;
+- referências conta/categoria/recorrência validadas no banco;
+- campos de billing são controlados pelo backend;
+- entitlement é aplicado também no PostgreSQL;
+- chave publishable do Supabase pode ficar no navegador; segredos não;
+- webhook verifica assinatura do Stripe;
+- app comercial não usa `localStorage` como banco financeiro;
+- repositório é público: antes de adicionar lógica proprietária sensível ou ampliar equipe, considere migrar o produto para um repositório privado.
+
+## Marca
+
+`SalesBoard Finance` é nome de trabalho. Antes de investimento relevante em domínio e tráfego, faça pesquisa de anterioridade/registrabilidade no INPI.
