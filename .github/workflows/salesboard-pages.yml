@@ -27,7 +27,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Prepare public SalesBoard artifact
+      - name: Prepare reviewed SalesBoard artifact
         working-directory: salesboard
         run: |
           rm -rf .pages-dist
