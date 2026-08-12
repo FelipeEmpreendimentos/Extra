@@ -1,0 +1,44 @@
+name: Repair SalesBoard auth and billing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/salesboard-auth-billing-fix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+
+      - name: Apply auth and billing patch
+        run: python salesboard/scripts/fix_auth_billing.py
+
+      - name: Validate patched JavaScript
+        run: |
+          node --check salesboard/app/app.js
+          grep -Fq 'forgot-screen' salesboard/app/index.html
+          grep -Fq 'recovery-password-confirm' salesboard/app/index.html
+          grep -Fq 'skipBrowserRedirect: true' salesboard/app/app.js
+          grep -Fq 'resetPasswordForEmail' salesboard/app/app.js
+          grep -Fq 'salesboard-checkout-' salesboard/supabase/functions/salesboard-checkout/index.ts
+          grep -Fq 'ensurePortalConfiguration' salesboard/supabase/functions/salesboard-billing-portal/index.ts
+
+      - name: Commit repaired product flow
+        run: |
+          if git diff --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app salesboard/supabase/functions
+          git commit -m "Repair SalesBoard login recovery and billing flow"
+          git push origin main
