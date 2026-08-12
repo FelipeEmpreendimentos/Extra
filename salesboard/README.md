@@ -12,15 +12,17 @@ O código está estruturado para lançamento comercial com:
 - PostgreSQL/Supabase com Row Level Security por usuário;
 - validações server-side de integridade e limites de plano;
 - dashboard, contas, entradas, saídas, categorias, orçamentos, metas e relatórios;
+- recorrências Pro com geração automática diária de ocorrências pendentes;
 - exportação CSV e busca global;
 - trial de 7 dias sem cartão com recursos Pro;
 - planos Essencial e Pro, mensal e anual;
 - Stripe Checkout autenticado, Customer Portal e webhook verificado;
 - bloqueio de escrita após trial/assinatura expirar;
-- exclusão de conta com cancelamento de assinatura ativa;
+- exclusão de conta com cancelamento seguro de assinatura ativa;
 - páginas de Termos, Privacidade e Segurança;
 - formulário de suporte via Netlify Forms;
 - headers de segurança e Content Security Policy;
+- artefato público separado de Functions/migrations/arquivos internos;
 - endpoint `/api/health` para validar configuração do ambiente;
 - CI `.github/workflows/salesboard-production-check.yml`.
 
@@ -30,19 +32,20 @@ O código está estruturado para lançamento comercial com:
 
 ### GitHub Pages — demonstração pública
 
-O workflow `.github/workflows/salesboard-pages.yml` publica a pasta `salesboard` no GitHub Pages. Nesse host, CTAs de cadastro são convertidos para `app/?demo=1` porque GitHub Pages é estático e não executa as Functions de autenticação/cobrança.
+O workflow `.github/workflows/salesboard-pages.yml` gera um artefato contendo somente os arquivos públicos e o publica no GitHub Pages. Nesse host, CTAs de cadastro são convertidos para `app/?demo=1` porque GitHub Pages é estático e não executa autenticação/cobrança server-side.
 
 ### Netlify / domínio próprio — produção
 
-Use Netlify (ou plataforma equivalente compatível com as Functions deste projeto) para o SaaS comercial.
+Use Netlify para o SaaS comercial.
 
-No Netlify, configure o projeto a partir do repositório e defina:
+No Netlify, conecte este repositório e configure:
 
 - **Base directory:** `salesboard`
-- **Publish directory:** `.`
-- **Functions directory:** `netlify/functions`
+- o `netlify.toml` já define o comando de build;
+- o build gera `.dist` e publica somente a interface;
+- Functions ficam em `netlify/functions`, fora do diretório publicado.
 
-O `netlify.toml` já contém redirects, headers e CSP.
+O `netlify.toml` já contém redirects, headers, CSP e configuração de Functions.
 
 ## 1. Configurar Supabase
 
@@ -51,8 +54,9 @@ O `netlify.toml` já contém redirects, headers e CSP.
 3. Execute, nesta ordem:
    - `supabase/schema.sql`
    - `supabase/002_integrity.sql`
+   - `supabase/003_recurring.sql`
 4. Em Auth, configure a URL principal para o domínio de produção.
-5. Adicione como URL de redirecionamento a rota de produção do aplicativo, por exemplo `https://seu-dominio.com/app/`.
+5. Adicione como URL de redirecionamento a rota do aplicativo, por exemplo `https://seu-dominio.com/app/`.
 6. Mantenha confirmação de e-mail habilitada para contas reais.
 7. Copie a URL do projeto, a chave **publishable** e a chave **secret** para as variáveis do Netlify.
 
@@ -78,7 +82,7 @@ Copie os Price IDs para:
 
 ### Customer Portal
 
-Ative o Stripe Customer Portal para permitir que o cliente veja cobranças, atualize método de pagamento e cancele a renovação.
+Ative o Stripe Customer Portal para permitir que o cliente visualize cobrança, atualize método de pagamento e cancele a renovação.
 
 ### Webhook
 
@@ -122,7 +126,21 @@ APP_NAME
 
 Não versione `.env` com valores reais.
 
-## 4. Identidade legal e suporte
+## 4. Recorrências automáticas
+
+`netlify/functions/process-recurring.mjs` é uma Scheduled Function configurada para `08:00 UTC` diariamente.
+
+O comportamento é:
+
+- somente usuários em trial válido ou plano Pro ativo recebem geração automática;
+- lançamentos marcados como semanais, mensais ou anuais funcionam como origem;
+- cada nova ocorrência é criada como **pendente**, para não alterar o saldo até o usuário confirmar que ela realmente aconteceu;
+- uma constraint única impede duplicação da mesma ocorrência;
+- contas cujo trial expirou ou cuja assinatura não dá acesso Pro são ignoradas.
+
+Depois do primeiro deploy de produção, confira no painel de Functions do Netlify se `process-recurring` aparece como `Scheduled` e execute uma vez manualmente em ambiente de teste.
+
+## 5. Identidade legal e suporte
 
 Antes de vender:
 
@@ -134,7 +152,7 @@ Antes de vender:
 
 As páginas legais exibem um aviso quando esses dados não estão configurados.
 
-## 5. Smoke test antes de abrir tráfego
+## 6. Smoke test antes de abrir tráfego
 
 Faça o fluxo completo em ambiente de teste:
 
@@ -146,27 +164,30 @@ Faça o fluxo completo em ambiente de teste:
 6. Confirme que outro usuário não enxerga nenhum desses dados.
 7. Teste limite de 3 contas no Essencial.
 8. Teste que meta e recorrência exigem Pro.
-9. Exporte CSV.
-10. Inicie checkout Essencial mensal em modo de teste.
-11. Confirme que o webhook altera a assinatura.
-12. Abra o Customer Portal.
-13. Simule falha/cancelamento e confirme atualização do acesso.
-14. Teste recuperação de senha.
-15. Envie o formulário de contato.
-16. Exclua uma conta de teste e confirme que os dados foram removidos e a assinatura encerrada.
-17. Faça testes em desktop e celular.
+9. Crie uma recorrência Pro, execute `process-recurring` manualmente e confirme que a ocorrência foi criada uma única vez como pendente.
+10. Exporte CSV.
+11. Inicie checkout Essencial mensal em modo de teste.
+12. Confirme que o webhook altera a assinatura.
+13. Abra o Customer Portal.
+14. Simule falha/cancelamento e confirme atualização do acesso.
+15. Teste recuperação de senha.
+16. Envie o formulário de contato.
+17. Exclua uma conta de teste e confirme que os dados foram removidos e a assinatura encerrada.
+18. Faça testes em desktop e celular.
 
-## 6. Validação automática
+## 7. Validação automática
 
-A cada alteração em `salesboard/**`, o workflow `Validate SalesBoard production` verifica:
+A cada alteração relevante, o workflow `Validate SalesBoard production` verifica:
 
 - presença de todos os arquivos de lançamento;
-- sintaxe JavaScript;
+- sintaxe JavaScript, inclusive Scheduled Function;
 - RLS e validações de integridade;
+- isolamento de referências de conta/categoria/recorrência;
 - autenticação nas Functions de cobrança;
 - assinatura de webhook Stripe;
 - ausência de banco financeiro em `localStorage` no app comercial;
 - ausência de segredos Stripe acidentalmente commitados;
+- geração de artefato estático limpo, sem Functions, migrations, `.env.example` ou `package.json`;
 - páginas legais, contato, exclusão de conta e gestão de cobrança;
 - ausência de depoimentos fictícios e de planos não lançados na landing.
 
@@ -176,6 +197,7 @@ A cada alteração em `salesboard/**`, o workflow `Validate SalesBoard productio
 cd salesboard
 npm install
 cp .env.example .env
+npm run check
 npm run dev
 ```
 
@@ -185,7 +207,7 @@ Depois abra a URL local informada pelo Netlify CLI.
 
 ```text
 Browser
-  ├─ Landing estática
+  ├─ Landing / app estático (.dist)
   ├─ Supabase Auth + queries autorizadas por RLS
   └─ /api/*
         └─ Netlify Functions
@@ -193,9 +215,12 @@ Browser
              └─ Stripe secret key (server only)
 
 Stripe Webhook
-  └─ Netlify Function
-       └─ valida assinatura do evento
-            └─ atualiza assinatura/permissão no Supabase
+  └─ valida assinatura do evento
+       └─ atualiza assinatura/permissão no Supabase
+
+Scheduled Function diária
+  └─ lê origens recorrentes Pro
+       └─ gera ocorrências pendentes sem duplicação
 ```
 
 ## Critério de GO
@@ -205,8 +230,9 @@ O lançamento comercial está liberado somente quando todos os itens abaixo fore
 - CI do SalesBoard verde;
 - `/api/health` retorna `ready`;
 - domínio HTTPS de produção configurado;
-- Supabase migrations executadas;
+- três migrations Supabase executadas;
 - Stripe Prices + webhook + Customer Portal configurados;
+- Scheduled Function de recorrência verificada no Netlify;
 - identidade legal e canais de contato preenchidos;
-- smoke test de cadastro → uso → checkout → cancelamento aprovado;
+- smoke test de cadastro → uso → recorrência → checkout → cancelamento aprovado;
 - páginas legais revisadas para a operação real.
