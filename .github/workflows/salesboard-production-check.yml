@@ -1,0 +1,104 @@
+name: Validate SalesBoard production
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "salesboard/**"
+      - ".github/workflows/salesboard-production-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "salesboard/**"
+      - ".github/workflows/salesboard-production-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check launch files
+        run: |
+          test -f salesboard/index.html
+          test -f salesboard/styles.css
+          test -f salesboard/launch.css
+          test -f salesboard/app.js
+          test -f salesboard/app/index.html
+          test -f salesboard/app/app.css
+          test -f salesboard/app/app.js
+          test -f salesboard/favicon.svg
+          test -f salesboard/manifest.webmanifest
+          test -f salesboard/robots.txt
+          test -f salesboard/404.html
+          test -f salesboard/contato.html
+          test -f salesboard/legal/privacidade.html
+          test -f salesboard/legal/termos.html
+          test -f salesboard/legal/seguranca.html
+          test -f salesboard/legal/legal.css
+          test -f salesboard/legal/legal.js
+          test -f salesboard/supabase/schema.sql
+          test -f salesboard/supabase/002_integrity.sql
+          test -f salesboard/netlify/functions/_shared.js
+          test -f salesboard/netlify/functions/public-config.js
+          test -f salesboard/netlify/functions/create-checkout-session.js
+          test -f salesboard/netlify/functions/create-billing-portal.js
+          test -f salesboard/netlify/functions/stripe-webhook.js
+          test -f salesboard/netlify/functions/delete-account.js
+          test -f salesboard/netlify.toml
+          test -f salesboard/.env.example
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check salesboard/app.js
+          node --check salesboard/app/app.js
+          node --check salesboard/legal/legal.js
+          node --check salesboard/netlify/functions/_shared.js
+          node --check salesboard/netlify/functions/public-config.js
+          node --check salesboard/netlify/functions/create-checkout-session.js
+          node --check salesboard/netlify/functions/create-billing-portal.js
+          node --check salesboard/netlify/functions/stripe-webhook.js
+          node --check salesboard/netlify/functions/delete-account.js
+
+      - name: Check production security invariants
+        run: |
+          grep -q "enable row level security" salesboard/supabase/schema.sql
+          grep -q "current_entitlement" salesboard/supabase/schema.sql
+          grep -q "validate_transaction_references" salesboard/supabase/002_integrity.sql
+          grep -q "constructEvent" salesboard/netlify/functions/stripe-webhook.js
+          grep -q "verifyUser" salesboard/netlify/functions/create-checkout-session.js
+          grep -q "SUPABASE_SECRET_KEY" salesboard/netlify/functions/_shared.js
+          grep -q "STRIPE_PRICE_PRO_MONTHLY" salesboard/netlify/functions/create-checkout-session.js
+          grep -q "Content-Security-Policy" salesboard/netlify.toml
+          if grep -q "localStorage" salesboard/app/app.js; then
+            echo "Production app must not use localStorage as a financial database"
+            exit 1
+          fi
+          if grep -qE "sk_(live|test)_[A-Za-z0-9]{12,}" salesboard --exclude=.env.example -R; then
+            echo "Possible Stripe secret committed"
+            exit 1
+          fi
+
+      - name: Check launch transparency and legal flows
+        run: |
+          grep -q "7 dias grátis" salesboard/index.html
+          grep -q "R$14,90" salesboard/index.html
+          grep -q "R$24,90" salesboard/index.html
+          grep -q "legal/privacidade.html" salesboard/index.html
+          grep -q "legal/termos.html" salesboard/index.html
+          grep -q "data-netlify=\"true\"" salesboard/contato.html
+          grep -q "Excluir minha conta" salesboard/app/index.html
+          grep -q "Gerenciar cobrança" salesboard/app/index.html
+          if grep -q "Marina Costa\|Rafael Lima\|Ana Souza" salesboard/index.html; then
+            echo "Fictitious testimonials must not appear as launch social proof"
+            exit 1
+          fi
+          if grep -q "Negócios" salesboard/index.html; then
+            echo "Unreleased Negocios plan must not be advertised"
+            exit 1
+          fi
