@@ -85,6 +85,75 @@
     setTimeout(() => item.remove(), 4800);
   }
 
+  let confirmationState = null;
+
+  function closeConfirmation(result = false) {
+    const modal = $('#confirm-modal');
+    if (modal) modal.hidden = true;
+    document.body.classList.remove('modal-open');
+    const stateToResolve = confirmationState;
+    confirmationState = null;
+    if (stateToResolve?.resolve) stateToResolve.resolve(Boolean(result));
+  }
+
+  function requestConfirmation({
+    title,
+    message,
+    confirmLabel = 'Excluir',
+    cancelLabel = 'Cancelar',
+    requireText = '',
+    details = []
+  }) {
+    return new Promise((resolve) => {
+      if (confirmationState?.resolve) closeConfirmation(false);
+      confirmationState = { resolve };
+
+      const modal = $('#confirm-modal');
+      const titleNode = $('#confirm-title');
+      const messageNode = $('#confirm-message');
+      const detailsNode = $('#confirm-details');
+      const textWrap = $('#confirm-text-wrap');
+      const textHint = $('#confirm-text-hint');
+      const textInput = $('#confirm-text-input');
+      const confirmButton = $('#confirm-action');
+      const cancelButton = $('#confirm-cancel');
+      const closeButton = $('#confirm-close');
+
+      titleNode.textContent = title || 'Confirmar ação';
+      messageNode.textContent = message || 'Revise esta ação antes de continuar.';
+      confirmButton.textContent = confirmLabel;
+      cancelButton.textContent = cancelLabel;
+
+      const safeDetails = Array.isArray(details) ? details.filter(Boolean) : [];
+      detailsNode.hidden = safeDetails.length === 0;
+      detailsNode.innerHTML = safeDetails.map((item) => `<li>${escapeHTML(item)}</li>`).join('');
+
+      textWrap.hidden = !requireText;
+      textHint.textContent = requireText;
+      textInput.value = '';
+      textInput.disabled = !requireText;
+      confirmButton.disabled = Boolean(requireText);
+
+      const syncConfirmState = () => {
+        if (!requireText) return;
+        textInput.value = textInput.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, requireText.length);
+        confirmButton.disabled = textInput.value !== requireText;
+      };
+
+      textInput.oninput = syncConfirmState;
+      confirmButton.onclick = () => {
+        if (requireText && textInput.value !== requireText) return;
+        closeConfirmation(true);
+      };
+      cancelButton.onclick = () => closeConfirmation(false);
+      closeButton.onclick = () => closeConfirmation(false);
+      modal.onclick = (event) => { if (event.target === modal) closeConfirmation(false); };
+
+      openModal('confirm-modal');
+      setTimeout(() => (requireText ? textInput : confirmButton).focus(), 40);
+    });
+  }
+
   function setAuthMessage(message, error = false) {
     const box = $('#auth-message');
     if (!message) {
@@ -1041,7 +1110,14 @@
   }
 
   async function deleteTransaction(id) {
-    if (!confirm('Excluir este lançamento? Esta ação não pode ser desfeita.')) return;
+    const row = state.transactions.find((item) => item.id === id);
+    const confirmed = await requestConfirmation({
+      title: 'Excluir lançamento?',
+      message: row ? `“${row.description}” será removido do histórico e dos cálculos financeiros.` : 'Este lançamento será removido do histórico e dos cálculos financeiros.',
+      confirmLabel: 'Excluir lançamento',
+      details: row?.goal_id ? ['O valor destinado à meta também deixará de contar no progresso.'] : []
+    });
+    if (!confirmed) return;
     try {
       if (demoMode) state.transactions = state.transactions.filter((row) => row.id !== id);
       else {
@@ -1147,22 +1223,54 @@
   }
 
   async function deleteEntity(mode, id) {
-    const label = mode === 'account' ? 'conta' : mode === 'category' ? 'categoria' : 'meta';
-    if (!confirm(`Excluir esta ${label}?`)) return;
+    const config = {
+      account: { label: 'conta', table: 'accounts', key: 'accounts' },
+      category: { label: 'categoria', table: 'categories', key: 'categories' },
+      goal: { label: 'meta', table: 'goals', key: 'goals' }
+    }[mode];
+    if (!config) return;
+
+    const row = state[config.key].find((item) => item.id === id);
+    const usedByHistory = mode === 'account'
+      ? state.transactions.some((transaction) => transaction.account_id === id)
+      : mode === 'category'
+        ? state.transactions.some((transaction) => transaction.category_id === id)
+        : state.transactions.some((transaction) => transaction.goal_id === id);
+    const shouldArchive = usedByHistory && (mode === 'account' || mode === 'category');
+    const displayName = row?.name ? `“${row.name}”` : `esta ${config.label}`;
+
+    const confirmed = await requestConfirmation({
+      title: shouldArchive ? `Arquivar ${config.label}?` : `Excluir ${config.label}?`,
+      message: shouldArchive
+        ? `${displayName} já possui lançamentos. Para preservar seu histórico financeiro, ela será arquivada em vez de apagada.`
+        : `${displayName} será removida permanentemente.`,
+      confirmLabel: shouldArchive ? 'Arquivar' : `Excluir ${config.label}`,
+      details: shouldArchive ? ['Os lançamentos antigos continuam nos relatórios e saldos históricos.', 'O item deixa de aparecer nas opções para novos lançamentos.'] : []
+    });
+    if (!confirmed) return;
+
     try {
       if (demoMode) {
-        const key = mode === 'account' ? 'accounts' : mode === 'category' ? 'categories' : 'goals';
-        state[key] = state[key].filter((row) => row.id !== id);
+        state[config.key] = state[config.key].filter((item) => item.id !== id);
+        if (mode === 'goal') state.transactions.forEach((transaction) => {
+          if (transaction.goal_id === id) {
+            transaction.goal_id = null;
+            transaction.goal_amount = null;
+          }
+        });
+      } else if (shouldArchive) {
+        const { error } = await supabaseClient.from(config.table).update({ archived: true }).eq('id', id).eq('user_id', state.user.id);
+        if (error) throw error;
+        await loadFinancialData();
       } else {
-        const table = mode === 'account' ? 'accounts' : mode === 'category' ? 'categories' : 'goals';
-        const { error } = await supabaseClient.from(table).delete().eq('id', id).eq('user_id', state.user.id);
+        const { error } = await supabaseClient.from(config.table).delete().eq('id', id).eq('user_id', state.user.id);
         if (error) throw error;
         await loadFinancialData();
       }
       renderAll();
-      toast(`${label[0].toUpperCase()}${label.slice(1)} excluída`);
+      toast(shouldArchive ? `${config.label[0].toUpperCase()}${config.label.slice(1)} arquivada` : `${config.label[0].toUpperCase()}${config.label.slice(1)} excluída`);
     } catch (error) {
-      toast('Não foi possível excluir', friendlyError(error), 'error');
+      toast(shouldArchive ? 'Não foi possível arquivar' : 'Não foi possível excluir', friendlyError(error), 'error');
     }
   }
 
@@ -1341,9 +1449,20 @@
       toast('Demonstração', 'A exclusão real só existe no ambiente de produção.');
       return;
     }
-    if (!confirm('Esta ação excluirá sua conta, dados financeiros e encerrará uma assinatura ativa. Deseja continuar?')) return;
-    const confirmation = prompt('Digite EXCLUIR para confirmar a exclusão permanente:');
-    if (confirmation !== 'EXCLUIR') return;
+    const confirmed = await requestConfirmation({
+      title: 'Excluir conta permanentemente?',
+      message: 'Essa ação encerra seu espaço no SalesBoard e não pode ser desfeita.',
+      confirmLabel: 'Excluir permanentemente',
+      cancelLabel: 'Manter minha conta',
+      requireText: 'EXCLUIR',
+      details: [
+        'Contas, categorias, lançamentos, metas e configurações serão apagados.',
+        'Se houver assinatura ativa, ela será cancelada antes da exclusão.',
+        'Um período de experiência já utilizado não será liberado novamente para o mesmo e-mail.'
+      ]
+    });
+    if (!confirmed) return;
+    const confirmation = 'EXCLUIR';
     try {
       const { data } = await supabaseClient.auth.getSession();
       const response = await fetch('/api/delete-account', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.session?.access_token}` }, body: JSON.stringify({ confirmation }) });
@@ -1365,7 +1484,7 @@
       state.categories.filter((row) => row.name.toLowerCase().includes(query)).slice(0, 4).forEach((row) => results.push({ icon: row.icon, title: row.name, subtitle: 'Categoria', view: 'categories' }));
       if (hasPro()) state.goals.filter((row) => row.name.toLowerCase().includes(query)).slice(0, 4).forEach((row) => results.push({ icon: row.icon, title: row.name, subtitle: 'Meta', view: 'goals' }));
     }
-    $('#global-search-results').innerHTML = query ? (results.length ? results.map((result) => `<button class="search-result" data-search-view="${result.view}"><span>${escapeHTML(result.icon)}</span><div><strong>${escapeHTML(result.title)}</strong><small>${escapeHTML(result.subtitle)}</small></div><b>→</b></button>`).join('') : emptyState('⌕', 'Nada encontrado', 'Tente outro termo.')) : '<div class="empty-state"><span>⌕</span><strong>Busca global</strong><p>Procure lançamentos, contas ou categorias.</p></div>';
+    $('#global-search-results').innerHTML = query ? (results.length ? results.map((result) => `<button class="search-result" data-search-view="${result.view}"><span>${escapeHTML(result.icon)}</span><div><strong>${escapeHTML(result.title)}</strong><small>${escapeHTML(result.subtitle)}</small></div><b>→</b></button>`).join('') : emptyState('⌕', 'Nada encontrado', 'Tente outro termo.')) : '<div class="empty-state"><span>⌕</span><strong>Busca global</strong><p>Procure lançamentos, contas, categorias ou metas.</p></div>';
     $$('[data-search-view]').forEach((button) => button.addEventListener('click', () => { closeModals(); switchView(button.dataset.searchView); }));
   }
 
@@ -1604,7 +1723,7 @@
     $('#sidebar-overlay').addEventListener('click', closeSidebar);
     document.addEventListener('keydown', (event) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') { event.preventDefault(); openSearch(); }
-      if (event.key === 'Escape') { closeModals(); closeSidebar(); }
+      if (event.key === 'Escape') { if (confirmationState) closeConfirmation(false); else closeModals(); closeSidebar(); }
     });
   }
 
