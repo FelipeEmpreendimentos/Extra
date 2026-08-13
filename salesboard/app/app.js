@@ -29,6 +29,8 @@
     subscription: null,
     accounts: [],
     categories: [],
+    accountCatalog: [],
+    categoryCatalog: [],
     transactions: [],
     goals: []
   };
@@ -233,12 +235,20 @@
     return state.profile?.subscription_status === 'active';
   }
 
+  function allCategories() {
+    return state.categoryCatalog?.length ? state.categoryCatalog : state.categories;
+  }
+
+  function allAccounts() {
+    return state.accountCatalog?.length ? state.accountCatalog : state.accounts;
+  }
+
   function categoryById(id) {
-    return state.categories.find((item) => item.id === id) || { name: 'Sem categoria', icon: '•', color: '#94a3b8' };
+    return allCategories().find((item) => item.id === id) || { name: 'Categoria indisponível', icon: '•', color: '#94a3b8' };
   }
 
   function accountById(id) {
-    return state.accounts.find((item) => item.id === id) || { name: 'Conta removida', icon: '▣' };
+    return allAccounts().find((item) => item.id === id) || { name: 'Conta indisponível', icon: '▣' };
   }
 
   function goalById(id) {
@@ -506,16 +516,18 @@
     if (demoMode) return;
     const userId = state.user.id;
     const [accounts, categories, transactions, goals, subscription] = await Promise.all([
-      supabaseClient.from('accounts').select('*').eq('user_id', userId).eq('archived', false).order('created_at'),
-      supabaseClient.from('categories').select('*').eq('user_id', userId).eq('archived', false).order('type').order('name'),
+      supabaseClient.from('accounts').select('*').eq('user_id', userId).order('created_at'),
+      supabaseClient.from('categories').select('*').eq('user_id', userId).order('type').order('name'),
       supabaseClient.from('transactions').select('*').eq('user_id', userId).order('transaction_date', { ascending: false }).order('created_at', { ascending: false }),
       supabaseClient.from('goals').select('*').eq('user_id', userId).order('created_at'),
       supabaseClient.from('subscriptions').select('*').eq('user_id', userId).maybeSingle()
     ]);
     const firstError = [accounts, categories, transactions, goals, subscription].find((result) => result.error)?.error;
     if (firstError) throw firstError;
-    state.accounts = accounts.data || [];
-    state.categories = categories.data || [];
+    state.accountCatalog = accounts.data || [];
+    state.categoryCatalog = categories.data || [];
+    state.accounts = state.accountCatalog.filter((row) => !row.archived);
+    state.categories = state.categoryCatalog.filter((row) => !row.archived);
     state.transactions = transactions.data || [];
     state.goals = goals.data || [];
     state.subscription = subscription.data || null;
@@ -565,6 +577,8 @@
       { id: 'g2', name: 'Notebook novo', icon: '💻', target_amount: 7000, current_amount: 3100, due_date: isoDate(new Date(now.getFullYear() + 1, 0, 31)) }
     ];
     state.subscription = { plan: 'pro', status: 'active', billing_cycle: 'annual', cancel_at_period_end: false, current_period_end: new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString() };
+    state.accountCatalog = [...state.accounts];
+    state.categoryCatalog = [...state.categories];
     enterApp();
     $('#demo-badge').hidden = false;
     toast('Modo demonstração', 'Os dados desta tela são fictícios e não são enviados para um servidor.');
@@ -690,7 +704,7 @@
       options: { ...chartDefaults(), plugins: { legend: { display: false }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${brl.format(context.raw)}` } } } }
     });
 
-    const categories = state.categories.filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
+    const categories = allCategories().filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
     charts.category?.destroy();
     charts.category = new Chart($('#category-chart'), {
       type: 'doughnut',
@@ -810,7 +824,7 @@
       ['Taxa de economia', `${totals.savingsRate.toFixed(1).replace('.', ',')}%`, `${(totals.savingsRate - previous.savingsRate) >= 0 ? '+' : ''}${(totals.savingsRate - previous.savingsRate).toFixed(1).replace('.', ',')} p.p. vs. mês anterior`, totals.savingsRate >= 0 ? 'good' : 'bad']
     ].map(([label, value, detail, cls]) => `<article class="summary-card"><span>${label}</span><strong>${value}</strong><small class="${cls}">${escapeHTML(detail)}</small></article>`).join('');
 
-    const expenses = state.categories.filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id, selectedKey) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
+    const expenses = allCategories().filter((category) => category.type === 'expense').map((category) => ({ ...category, total: categorySpent(category.id, selectedKey) })).filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
     $('#report-categories').innerHTML = expenses.slice(0, 7).map((category) => `<div class="rank-row"><span>${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(category.name)}</strong><small>${totals.expense ? (category.total / totals.expense * 100).toFixed(1).replace('.', ',') : 0}% das despesas</small></div><b>${brl.format(category.total)}</b></div>`).join('') || emptyState('⌁', 'Sem despesas', `Não há saídas realizadas em ${selectedLabel}.`);
 
     $('#report-pro-lock').hidden = hasPro();
@@ -877,7 +891,7 @@
       ['Resultado recorrente', brl.format(recurringIncome - recurringExpense), `${recurring.length} compromissos considerados`]
     ].map(([label, value, detail]) => `<div class="metric-row"><div><span>${escapeHTML(label)}</span><small>${escapeHTML(detail)}</small></div><strong>${escapeHTML(value)}</strong></div>`).join('');
 
-    const accountMovements = state.accounts.filter((account) => !account.archived).map((account) => {
+    const accountMovements = allAccounts().map((account) => {
       const rows = currentRows.filter((row) => row.account_id === account.id);
       const net = rows.reduce((sum, row) => sum + (row.type === 'income' ? Number(row.amount) : -Number(row.amount)), 0);
       return { ...account, net, count: rows.length };
