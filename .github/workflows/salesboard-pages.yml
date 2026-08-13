@@ -34,8 +34,17 @@ jobs:
           mkdir -p .pages-dist
           cp index.html styles.css launch.css quality.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .pages-dist/
           cp -R app legal .pages-dist/
+
+          # Compatibility copy: keep the historical /Extra/salesboard/ URL working
+          mkdir -p .pages-dist/salesboard
+          cp index.html styles.css launch.css quality.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .pages-dist/salesboard/
+          cp -R app legal .pages-dist/salesboard/
+
           test -f .pages-dist/quality.css
           test -f .pages-dist/app/quality.css
+          test -f .pages-dist/salesboard/index.html
+          test -f .pages-dist/salesboard/app/index.html
+          test -f .pages-dist/salesboard/app/quality.css
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
