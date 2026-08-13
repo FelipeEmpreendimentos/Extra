@@ -1,0 +1,39 @@
+name: Repair SalesBoard archived transaction editing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "salesboard/scripts/fix_archived_edit_options.py"
+      - ".github/workflows/salesboard-archived-edit-temp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Keep archived references visible while editing history
+        run: python salesboard/scripts/fix_archived_edit_options.py
+      - name: Validate browser JavaScript
+        run: node --check salesboard/app/app.js
+      - name: Verify edit markers
+        run: |
+          grep -Fq 'historicalCategory' salesboard/app/app.js
+          grep -Fq 'historicalAccount' salesboard/app/app.js
+          grep -Fq ' · Arquivada' salesboard/app/app.js
+      - name: Commit transaction edit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app/app.js
+          git commit -m "Keep archived references editable in history"
+          git push origin main
