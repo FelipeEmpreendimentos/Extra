@@ -1273,13 +1273,20 @@
 
     try {
       if (demoMode) {
-        state[config.key] = state[config.key].filter((item) => item.id !== id);
-        if (mode === 'goal') state.transactions.forEach((transaction) => {
-          if (transaction.goal_id === id) {
-            transaction.goal_id = null;
-            transaction.goal_amount = null;
-          }
-        });
+        if (shouldArchive) {
+          const catalog = mode === 'account' ? state.accountCatalog : state.categoryCatalog;
+          const catalogItem = catalog.find((item) => item.id === id);
+          if (catalogItem) catalogItem.archived = true;
+          state[config.key] = state[config.key].filter((item) => item.id !== id);
+        } else {
+          state[config.key] = state[config.key].filter((item) => item.id !== id);
+          if (mode === 'goal') state.transactions.forEach((transaction) => {
+            if (transaction.goal_id === id) {
+              transaction.goal_id = null;
+              transaction.goal_amount = null;
+            }
+          });
+        }
       } else if (shouldArchive) {
         const { error } = await supabaseClient.from(config.table).update({ archived: true }).eq('id', id).eq('user_id', state.user.id);
         if (error) throw error;
