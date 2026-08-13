@@ -8,7 +8,64 @@
 .marketing-site,.hero,.hero-content,.hero-product-wrap,.feature-bento,.pricing-grid,.comparison-wrap{min-width:0}
 img,svg{max-width:100%}
 
+@media(max-width:900px){
+  .marketing-header{
+    justify-content:space-between;
+  }
+  .marketing-header .brand{
+    flex:0 1 auto;
+    min-width:0;
+  }
+  .mobile-menu-btn{
+    margin-left:auto!important;
+    flex:0 0 44px;
+    width:44px;
+    height:44px;
+    padding:10px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    position:static;
+    background:transparent!important;
+    border:0!important;
+    border-radius:10px;
+    box-shadow:none!important;
+    overflow:hidden;
+    appearance:none;
+    -webkit-appearance:none;
+  }
+  .mobile-menu-btn:before,
+  .mobile-menu-btn:after{
+    content:none!important;
+    display:none!important;
+  }
+  .mobile-menu-btn span{
+    display:block;
+    width:24px;
+    height:2.5px;
+    margin:0!important;
+    flex:0 0 2.5px;
+    border-radius:999px;
+    background:#182534!important;
+  }
+  .mobile-menu-btn:focus,
+  .mobile-menu-btn:active{
+    outline:none;
+    box-shadow:none!important;
+    background:#f4f7f9!important;
+  }
+}
+
 @media(max-width:680px){
+  .marketing-header{
+    padding-left:16px;
+    padding-right:12px;
+  }
+  .mobile-menu-btn{
+    margin-right:0!important;
+  }
   .launch-proof{
     display:grid;
     grid-template-columns:minmax(0,.9fr) minmax(0,.9fr) minmax(0,1.35fr);
@@ -39,7 +96,7 @@ img,svg{max-width:100%}
 }
 
 @media(max-width:340px){
-  .marketing-header{padding-left:12px;padding-right:12px}
+  .marketing-header{padding-left:12px;padding-right:8px}
   .hero,.section-light,.security-section,.comparison-section,.faq-section{padding-left:12px;padding-right:12px}
   .hero h1{overflow-wrap:anywhere}
   .launch-proof span{padding-left:5px;padding-right:5px;font-size:10px}
