@@ -21,7 +21,6 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           app_path = Path('salesboard/app/app.js')
           html_path = Path('salesboard/app/index.html')
@@ -58,9 +57,11 @@ jobs:
               raise SystemExit('toast marker not found')
           app = app.replace(old_toast, new_toast, 1)
 
-          html, count = re.subn(r'app\\.js\\?v=[^\"\']+', 'app.js?v=20260813-future1', html, count=1)
-          if count != 1:
+          old_version = 'app.js?v=20260813-google3'
+          new_version = 'app.js?v=20260813-future1'
+          if old_version not in html:
               raise SystemExit('app.js version marker not found')
+          html = html.replace(old_version, new_version, 1)
 
           app_path.write_text(app, encoding='utf-8')
           html_path.write_text(html, encoding='utf-8')
@@ -68,9 +69,9 @@ jobs:
       - name: Validate future transaction contract
         run: |
           grep -Fq 'function isFutureTransaction' salesboard/app/app.js
-          grep -Fq "transactionStatusLabel" salesboard/app/app.js
-          grep -Fq "item.transaction_date <= today" salesboard/app/app.js
-          grep -Fq "Lançamento agendado" salesboard/app/app.js
+          grep -Fq 'transactionStatusLabel' salesboard/app/app.js
+          grep -Fq 'item.transaction_date <= today' salesboard/app/app.js
+          grep -Fq 'Lançamento agendado' salesboard/app/app.js
           grep -Fq 'app.js?v=20260813-future1' salesboard/app/index.html
           node --check salesboard/app/app.js
       - name: Commit rule
