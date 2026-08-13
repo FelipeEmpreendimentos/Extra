@@ -41,6 +41,38 @@ for (const viewport of viewports) {
     await page.goto(`${base}/app/?demo=1`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForSelector('#app-shell:not([hidden])', { timeout: 30000 });
 
+    // Billing/current-plan alignment: badge stays inside the card and labels never overlap.
+    if (!(await openView(page, 'billing'))) throw new Error('view billing não encontrada');
+    const billingGeometry = await page.evaluate(() => {
+      const rect = (element) => {
+        const r = element?.getBoundingClientRect();
+        return r ? { top: r.top, left: r.left, right: r.right, bottom: r.bottom, width: r.width, height: r.height, cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2 } : null;
+      };
+      const plan = document.querySelector('#current-plan');
+      const badge = document.querySelector('#current-plan>div:last-child');
+      const small = badge?.querySelector('small');
+      const strong = badge?.querySelector('strong');
+      const trial = document.querySelector('#trial-card');
+      const trialChildren = trial ? [...trial.children].map(rect).filter(Boolean) : [];
+      return { plan: rect(plan), badge: rect(badge), small: rect(small), strong: rect(strong), trial: rect(trial), trialChildren };
+    });
+    if (billingGeometry.plan && billingGeometry.badge) {
+      if (billingGeometry.badge.left < billingGeometry.plan.left - 1 || billingGeometry.badge.right > billingGeometry.plan.right + 1 || billingGeometry.badge.top < billingGeometry.plan.top - 1 || billingGeometry.badge.bottom > billingGeometry.plan.bottom + 1) fail(viewport, 'badge Plano atual saiu do card de cobrança');
+      if (viewport.width > 680 && Math.abs(billingGeometry.badge.cy - billingGeometry.plan.cy) > 24) fail(viewport, 'badge Plano atual não está centralizado verticalmente');
+    }
+    if (billingGeometry.small && billingGeometry.strong) {
+      const sameLine = Math.abs(billingGeometry.small.cy - billingGeometry.strong.cy) < 12;
+      if (sameLine && billingGeometry.strong.left - billingGeometry.small.right < 6) fail(viewport, 'Plano atual e nome do plano estão encostados');
+      const overlapX = Math.min(billingGeometry.small.right, billingGeometry.strong.right) - Math.max(billingGeometry.small.left, billingGeometry.strong.left);
+      const overlapY = Math.min(billingGeometry.small.bottom, billingGeometry.strong.bottom) - Math.max(billingGeometry.small.top, billingGeometry.strong.top);
+      if (overlapX > 1 && overlapY > 1) fail(viewport, 'textos do badge Plano atual estão sobrepostos');
+    }
+    if (billingGeometry.trial && billingGeometry.trialChildren.length) {
+      for (const child of billingGeometry.trialChildren) {
+        if (child.left < billingGeometry.trial.left - 1 || child.right > billingGeometry.trial.right + 1) fail(viewport, 'conteúdo do card lateral de plano ultrapassa o card');
+      }
+    }
+
     await page.locator('#quick-add').evaluate((element) => element.click());
     await page.locator('input[name="transaction_type"][value="income"]').check();
     await page.locator('#tx-goal').selectOption('g1');
@@ -100,7 +132,6 @@ for (const viewport of viewports) {
     const rentRow = page.locator('#transactions-body tr').filter({ hasText: 'Aluguel' }).first();
     if (!(await rentRow.count()) || !(await rentRow.innerText()).includes('Moradia')) fail(viewport, 'histórico perdeu o nome da categoria arquivada');
 
-    // Editar histórico deve manter as referências arquivadas visíveis e selecionadas.
     await rentRow.locator('[data-edit-transaction]').evaluate((element) => element.click());
     await page.waitForSelector('#transaction-modal:not([hidden])');
     const archivedEdit = await page.evaluate(() => ({
@@ -132,4 +163,4 @@ if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('PASS UI contract: alignment + confirmations + archive history + historical editing');
+console.log('PASS UI contract: alignment + billing/sidebar + confirmations + archive history + historical editing');
