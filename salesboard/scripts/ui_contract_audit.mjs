@@ -26,8 +26,8 @@ for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']
   const source = fs.readFileSync(file, 'utf8');
   if (/\b(?:confirm|prompt|alert)\s*\(/.test(source)) failures.push(`static: diálogo nativo encontrado em ${file}`);
 }
-for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()']) {
-  if (!appSource.includes(marker)) failures.push(`static: catálogo histórico ausente: ${marker}`);
+for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()', 'historicalAccount', 'historicalCategory']) {
+  if (!appSource.includes(marker)) failures.push(`static: contrato histórico ausente: ${marker}`);
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -72,14 +72,12 @@ for (const viewport of viewports) {
 
     await page.locator('#transaction-modal [data-close-modal]').first().evaluate((element) => element.click());
 
-    // Lançamento: deve abrir modal do SalesBoard, nunca confirm() do navegador.
     if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada');
     await page.locator('[data-delete-transaction]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     if (!(await page.locator('#confirm-title').textContent()).includes('Excluir lançamento')) fail(viewport, 'confirmação de lançamento não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
-    // Conta com histórico deve usar Arquivar e preservar a identificação nos lançamentos antigos.
     if (!(await openView(page, 'accounts'))) throw new Error('view accounts não encontrada');
     await page.locator('[data-delete-account-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
@@ -91,7 +89,6 @@ for (const viewport of viewports) {
     const freelancerRow = page.locator('#transactions-body tr').filter({ hasText: 'Projeto freelancer' }).first();
     if (!(await freelancerRow.count()) || !(await freelancerRow.innerText()).includes('Conta principal')) fail(viewport, 'histórico perdeu o nome da conta arquivada');
 
-    // Categoria com histórico segue a mesma regra e mantém a descrição histórica.
     if (!(await openView(page, 'categories'))) throw new Error('view categories não encontrada');
     await page.locator('[data-delete-category-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
@@ -103,7 +100,19 @@ for (const viewport of viewports) {
     const rentRow = page.locator('#transactions-body tr').filter({ hasText: 'Aluguel' }).first();
     if (!(await rentRow.count()) || !(await rentRow.innerText()).includes('Moradia')) fail(viewport, 'histórico perdeu o nome da categoria arquivada');
 
-    // Meta usa o mesmo componente de confirmação.
+    // Editar histórico deve manter as referências arquivadas visíveis e selecionadas.
+    await rentRow.locator('[data-edit-transaction]').evaluate((element) => element.click());
+    await page.waitForSelector('#transaction-modal:not([hidden])');
+    const archivedEdit = await page.evaluate(() => ({
+      accountText: document.querySelector('#tx-account')?.selectedOptions?.[0]?.textContent || '',
+      categoryText: document.querySelector('#tx-category')?.selectedOptions?.[0]?.textContent || '',
+      accountValue: document.querySelector('#tx-account')?.value || '',
+      categoryValue: document.querySelector('#tx-category')?.value || ''
+    }));
+    if (!archivedEdit.accountValue || !archivedEdit.accountText.includes('Conta principal') || !archivedEdit.accountText.includes('Arquivada')) fail(viewport, 'edição histórica não preserva a conta arquivada');
+    if (!archivedEdit.categoryValue || !archivedEdit.categoryText.includes('Moradia') || !archivedEdit.categoryText.includes('Arquivada')) fail(viewport, 'edição histórica não preserva a categoria arquivada');
+    await page.locator('#transaction-modal [data-close-modal]').first().evaluate((element) => element.click());
+
     if (!(await openView(page, 'goals'))) throw new Error('view goals não encontrada');
     await page.locator('[data-delete-goal-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
@@ -123,4 +132,4 @@ if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('PASS UI contract: alignment + custom confirmations + archived history preservation');
+console.log('PASS UI contract: alignment + confirmations + archive history + historical editing');
