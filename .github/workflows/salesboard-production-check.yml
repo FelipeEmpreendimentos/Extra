@@ -85,16 +85,22 @@ jobs:
           grep -Fq 'categories_active_user_type_name_unique' salesboard/supabase/014_archive_history_integrity.sql
           grep -Fq 'account_is_archived' salesboard/supabase/014_archive_history_integrity.sql
           grep -Fq 'category_is_archived' salesboard/supabase/014_archive_history_integrity.sql
+          grep -Fq "old.archived = true" salesboard/supabase/schema.sql
+          grep -Fq 'PLAN_LIMIT_ACCOUNTS' salesboard/supabase/schema.sql
           if grep -Fq 'localStorage' salesboard/app/app.js; then echo 'Production app must not use localStorage as a financial database'; exit 1; fi
 
       - name: Check Edge Function security and billing invariants
         run: |
           grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'checkout auth validation missing'; exit 1; }
           grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'billing portal auth validation missing'; exit 1; }
+          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'account deletion auth validation missing'; exit 1; }
+          grep -Fq "body.confirmation !== 'EXCLUIR'" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'destructive account confirmation missing'; exit 1; }
+          grep -Fq "cancelStripeSubscription" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'subscription cancellation before account deletion missing'; exit 1; }
           grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'Stripe signature verification missing'; exit 1; }
           grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'webhook secret configuration missing'; exit 1; }
           grep -Fq 'STRIPE_PRICE_' salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'live price configuration missing'; exit 1; }
           grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'live product configuration missing'; exit 1; }
+          grep -Fq "features[subscription_cancel][mode]','at_period_end'" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'safe end-of-period cancellation configuration missing'; exit 1; }
           grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts || { echo 'health billing readiness check missing'; exit 1; }
           if grep -PqR --exclude=.env.example 'sk_(live|test)_(?!x{8,})[A-Za-z0-9]{20,}' salesboard; then echo 'Possible Stripe secret committed'; exit 1; fi
 
@@ -138,13 +144,22 @@ jobs:
           grep -Fq 'id="tx-goal-amount"' salesboard/app/index.html
           grep -Fq 'id="confirm-modal"' salesboard/app/index.html
           grep -Fq 'requestConfirmation' salesboard/app/app.js
+          grep -Fq 'reactivateEntity' salesboard/app/app.js
+          grep -Fq 'renderArchivedItems' salesboard/app/app.js
+          grep -Fq 'setResendConfirmation' salesboard/app/app.js
+          grep -Fq 'form.noValidate = true' salesboard/app/app.js
+          grep -Fq 'Começar 3 dias no' salesboard/app/app.js
+          grep -Fq 'id="archived-items"' salesboard/app/index.html
+          grep -Fq 'id="resend-confirmation"' salesboard/app/index.html
           grep -Fq 'accountCatalog' salesboard/app/app.js
           grep -Fq 'categoryCatalog' salesboard/app/app.js
           grep -Fq 'goal_amount' salesboard/app/app.js
           grep -Fq 'Acima do limite' salesboard/app/app.js
           grep -Fq 'Alterar no portal' salesboard/app/app.js
           grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
-          if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then echo 'Native browser dialogs are forbidden in SalesBoard'; exit 1; fi
+          for form in login-form register-form forgot-form recovery-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || { echo "$form must disable native browser validation"; exit 1; }; done
+          if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then echo 'Native browser dialogs are forbidden in SalesBoard'; exit 1; fi
+          if grep -Pq '\breportValidity\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then echo 'Native browser validation UI is forbidden in SalesBoard'; exit 1; fi
           if grep -Fq '2 meses grátis' salesboard/index.html salesboard/app/index.html; then echo 'Annual plan must not be advertised as extra free trial time'; exit 1; fi
           if grep -Fq 'data-contribute-goal' salesboard/app/app.js; then echo 'Synthetic goal contributions must not remain'; exit 1; fi
           if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then echo 'Fictitious testimonials must not appear as launch social proof'; exit 1; fi
