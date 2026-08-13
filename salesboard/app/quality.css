@@ -75,7 +75,8 @@ canvas{max-width:100%!important}
 .transaction-grid .field-help{margin-top:0;min-height:30px}
 .transaction-grid .check{align-self:start!important;min-height:44px;align-items:center!important;margin:0!important;padding:0!important}
 .transaction-grid .check input{margin:0!important}
-.transaction-grid #tx-goal-wrap,.transaction-grid #tx-goal-amount-wrap{align-self:start}
+.transaction-grid .recurring-field{grid-column:1/-1}
+.transaction-grid #tx-goal-wrap,.transaction-grid #tx-goal-amount-wrap,.transaction-grid #tx-status-wrap{align-self:start}
 .transaction-grid #tx-status{height:44px}
 .transaction-grid #tx-goal,.transaction-grid #tx-category,.transaction-grid #tx-account,.transaction-grid #tx-recurrence{height:44px}
 
@@ -95,7 +96,7 @@ canvas{max-width:100%!important}
 
 @media(max-width:680px){
   .transaction-grid{grid-template-columns:1fr!important}
-  .transaction-grid .full{grid-column:1!important}
+  .transaction-grid .full,.transaction-grid .recurring-field{grid-column:1!important}
   .transaction-grid .field-help{min-height:0}
   .confirm-content{grid-template-columns:42px minmax(0,1fr);gap:13px}.confirm-icon{width:42px;height:42px;border-radius:13px}
 }
