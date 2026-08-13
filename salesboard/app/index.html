@@ -39,7 +39,7 @@
           <span class="kicker">3 dias grátis</span><h2>Crie sua conta</h2><p>Você não precisa cadastrar cartão agora.</p>
           <form id="register-form" novalidate class="stack-form"><label>Seu nome<input id="register-name" autocomplete="name" required maxlength="80" placeholder="Como podemos chamar você?" /></label><label>E-mail<input id="register-email" type="email" autocomplete="email" required placeholder="voce@exemplo.com" /></label><label>Senha<div class="password-field"><input id="register-password" type="password" autocomplete="new-password" required minlength="8" placeholder="Mínimo de 8 caracteres" /><button type="button" data-toggle-password="register-password" aria-label="Mostrar senha">◉</button></div></label><label class="check terms-check"><input id="accept-terms" type="checkbox" required /> <span>Li e aceito os <a href="../legal/termos.html" target="_blank" rel="noopener">Termos de Uso</a> e a <a href="../legal/privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label><button class="button primary wide" type="submit">Criar conta grátis</button></form>
         </div>
-        <div id="auth-message" class="auth-message" hidden></div><button type="button" class="button subtle wide auth-secondary-action" id="resend-confirmation" hidden>Reenviar e-mail de confirmação</button>
+        <div id="auth-message" class="auth-message" role="status" aria-live="polite" hidden></div><button type="button" class="button subtle wide auth-secondary-action" id="resend-confirmation" hidden>Reenviar e-mail de confirmação</button>
       </div>
     </main>
   </section>
@@ -54,13 +54,13 @@
         <label>E-mail<input id="forgot-email" type="email" autocomplete="email" required placeholder="voce@exemplo.com" /></label>
         <button class="button primary wide" type="submit">Enviar link de recuperação</button>
       </form>
-      <div id="forgot-status" class="auth-message" hidden></div>
+      <div id="forgot-status" class="auth-message" role="status" aria-live="polite" hidden></div>
       <button type="button" class="link-button auth-flow-back" id="forgot-back">← Voltar para o login</button>
     </div>
   </section>
 
   <section id="recovery-screen" class="center-screen" hidden>
-    <div class="setup-card auth-flow-card"><span class="brand-mark"><i></i><i></i><i></i></span><span class="kicker">Link verificado</span><h1>Defina uma nova senha</h1><p>Escolha uma senha com pelo menos 8 caracteres e confirme antes de salvar.</p><form id="recovery-form" novalidate class="stack-form"><label>Nova senha<div class="password-field"><input id="recovery-password" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password" aria-label="Mostrar senha">◉</button></div></label><label>Confirmar nova senha<div class="password-field"><input id="recovery-password-confirm" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password-confirm" aria-label="Mostrar senha">◉</button></div></label><div class="password-rules"><span id="rule-length">○ 8 ou mais caracteres</span><span id="rule-match">○ As duas senhas são iguais</span></div><button class="button primary wide" type="submit">Salvar nova senha</button></form><div id="recovery-message" class="auth-message" hidden></div></div>
+    <div class="setup-card auth-flow-card"><span class="brand-mark"><i></i><i></i><i></i></span><span class="kicker">Link verificado</span><h1>Defina uma nova senha</h1><p>Escolha uma senha com pelo menos 8 caracteres e confirme antes de salvar.</p><form id="recovery-form" novalidate class="stack-form"><label>Nova senha<div class="password-field"><input id="recovery-password" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password" aria-label="Mostrar senha">◉</button></div></label><label>Confirmar nova senha<div class="password-field"><input id="recovery-password-confirm" type="password" minlength="8" required autocomplete="new-password" /><button type="button" data-toggle-password="recovery-password-confirm" aria-label="Mostrar senha">◉</button></div></label><div class="password-rules"><span id="rule-length">○ 8 ou mais caracteres</span><span id="rule-match">○ As duas senhas são iguais</span></div><button class="button primary wide" type="submit">Salvar nova senha</button></form><div id="recovery-message" class="auth-message" role="status" aria-live="polite" hidden></div></div>
   </section>
 
   <section id="trial-plan-screen" class="trial-choice-screen" hidden>

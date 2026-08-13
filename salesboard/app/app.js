@@ -206,6 +206,16 @@
     return friendlyError(error);
   }
 
+  function authCallbackMessage() {
+    const code = String(params.get('error_code') || params.get('error') || '').toLowerCase();
+    const description = String(params.get('error_description') || '').replace(/\+/g, ' ').trim().toLowerCase();
+    if (!code && !description) return '';
+    if (code.includes('access_denied') || description.includes('access denied') || description.includes('cancel')) return 'O login foi cancelado. Nenhuma alteração foi feita na sua conta.';
+    if (description.includes('invalid_client') || description.includes('client secret')) return 'O login com Google não pôde ser concluído porque a integração do provedor precisa ser revisada. Use e-mail e senha enquanto isso.';
+    if (code.includes('otp_expired') || code.includes('token_expired') || description.includes('expired') || description.includes('invalid token')) return 'Este link de autenticação não é mais válido. Solicite um novo link e tente novamente.';
+    return 'Não foi possível concluir a autenticação. Tente novamente; se o problema continuar, use e-mail e senha.';
+  }
+
   function setInlineMessage(selector, message, error = false) {
     const box = $(selector);
     if (!box) return;
@@ -394,7 +404,9 @@
     }
 
     if (!session) {
+      const callbackMessage = authCallbackMessage();
       showAuth(params.get('mode') === 'register' ? 'register' : 'login');
+      if (callbackMessage) setAuthMessage(callbackMessage, true);
       return;
     }
 
