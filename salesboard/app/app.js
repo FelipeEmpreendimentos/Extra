@@ -1172,8 +1172,11 @@
         recurrence_interval: $('#tx-recurring').checked ? $('#tx-recurrence').value : null,
         notes: $('#tx-notes').value.trim() || null
       };
-      if (!payload.description || payload.amount <= 0) throw new Error('Preencha descrição e valor corretamente.');
+      if (!payload.description) throw new Error('Informe uma descrição para o lançamento.');
+      if (payload.amount <= 0) throw new Error('Informe um valor maior que zero.');
+      if (!payload.transaction_date) throw new Error('Informe a data do lançamento.');
       if (!payload.category_id) throw new Error('Crie ou selecione uma categoria compatível com este lançamento.');
+      if (!payload.account_id) throw new Error('Crie ou selecione uma conta para este lançamento.');
       if (payload.goal_amount != null && (payload.goal_amount <= 0 || payload.goal_amount > payload.amount)) throw new Error('INVALID_GOAL_AMOUNT');
       if (payload.recurring && !hasPro()) throw new Error('PLAN_REQUIRED_PRO');
       if (demoMode) {
@@ -1276,14 +1279,16 @@
     const button = $('#entity-form button[type="submit"]');
     setButtonLoading(button, true, 'Salvando...');
     try {
+      const entityName = String(form.get('name') || '').trim();
+      if (!entityName) throw new Error('Informe um nome antes de salvar.');
       if (entityMode === 'account') {
-        const payload = { user_id: state.user.id, name: form.get('name').trim(), type: form.get('type'), opening_balance: parseMoney(form.get('opening_balance')), icon: form.get('icon').trim() || '▣', color: form.get('color') || COLORS[0] };
+        const payload = { user_id: state.user.id, name: entityName, type: form.get('type'), opening_balance: parseMoney(form.get('opening_balance')), icon: form.get('icon').trim() || '▣', color: form.get('color') || COLORS[0] };
         await persistEntity('accounts', payload, editingEntityId);
       } else if (entityMode === 'category') {
-        const payload = { user_id: state.user.id, name: form.get('name').trim(), type: form.get('type'), budget: form.get('type') === 'expense' ? Math.max(0, parseMoney(form.get('budget'))) : 0, icon: form.get('icon').trim() || '•', color: form.get('color') || COLORS[1] };
+        const payload = { user_id: state.user.id, name: entityName, type: form.get('type'), budget: form.get('type') === 'expense' ? Math.max(0, parseMoney(form.get('budget'))) : 0, icon: form.get('icon').trim() || '•', color: form.get('color') || COLORS[1] };
         await persistEntity('categories', payload, editingEntityId);
       } else if (entityMode === 'goal') {
-        const payload = { user_id: state.user.id, name: form.get('name').trim(), target_amount: parseMoney(form.get('target_amount')), current_amount: Math.max(0, parseMoney(form.get('current_amount'))), due_date: form.get('due_date') || null, icon: form.get('icon').trim() || '◎' };
+        const payload = { user_id: state.user.id, name: entityName, target_amount: parseMoney(form.get('target_amount')), current_amount: Math.max(0, parseMoney(form.get('current_amount'))), due_date: form.get('due_date') || null, icon: form.get('icon').trim() || '◎' };
         if (payload.target_amount <= 0) throw new Error('Defina um valor alvo maior que zero.');
         await persistEntity('goals', payload, editingEntityId);
       }
@@ -1535,11 +1540,26 @@
       const needsTerms = !state.profile?.terms_accepted_at;
       if (needsTerms && !$('#oauth-accept-terms')?.checked) throw new Error('Aceite os Termos de Uso e a Política de Privacidade para continuar.');
       const workspaceType = $('input[name="workspace_type"]:checked').value;
-      const workspaceName = $('#workspace-name-input').value.trim() || 'Meu espaço';
+      const workspaceName = $('#workspace-name-input').value.trim();
+      const accountName = $('#first-account-name').value.trim();
+      if (!workspaceName) {
+        onboardingStep = 1;
+        updateOnboardingStep();
+        toast('Nome do espaço necessário', 'Informe como você quer chamar seu espaço antes de continuar.', 'warning');
+        focusField('#workspace-name-input');
+        return;
+      }
+      if (!accountName) {
+        onboardingStep = 2;
+        updateOnboardingStep();
+        toast('Nome da conta necessário', 'Informe um nome para sua primeira conta antes de continuar.', 'warning');
+        focusField('#first-account-name');
+        return;
+      }
       const { error } = await supabaseClient.rpc('complete_salesboard_onboarding', {
         p_workspace_type: workspaceType,
         p_workspace_name: workspaceName,
-        p_account_name: $('#first-account-name').value.trim() || 'Conta principal',
+        p_account_name: accountName,
         p_account_type: $('#first-account-type').value,
         p_opening_balance: parseMoney($('#first-account-balance').value),
         p_create_budgets: false,
@@ -1697,7 +1717,7 @@
   }
 
   function initStaticEvents() {
-    ['#login-form', '#register-form', '#forgot-form', '#recovery-form'].forEach((selector) => {
+    ['#login-form', '#register-form', '#forgot-form', '#recovery-form', '#onboarding-form', '#profile-form', '#transaction-form', '#entity-form', '#confirm-form'].forEach((selector) => {
       const form = $(selector);
       if (!form) return;
       form.noValidate = true;

@@ -31,7 +31,7 @@ for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'all
 }
 
 const appHtml = fs.readFileSync('salesboard/app/index.html', 'utf8');
-for (const id of ['login-form', 'register-form', 'forgot-form', 'recovery-form']) {
+for (const id of ['login-form', 'register-form', 'forgot-form', 'recovery-form', 'onboarding-form', 'profile-form', 'transaction-form', 'entity-form', 'confirm-form']) {
   if (!new RegExp(`<form id=\"${id}\"[^>]*novalidate`).test(appHtml)) failures.push(`static: formulário ${id} ainda permite validação nativa`);
 }
 if (!appHtml.includes('id=\"archived-items\"')) failures.push('static: gerenciador de itens arquivados ausente');
