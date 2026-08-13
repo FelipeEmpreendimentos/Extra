@@ -447,8 +447,18 @@
     return base + linked;
   }
 
+  function isFutureTransaction(item, today = isoDate()) {
+    return Boolean(item?.transaction_date) && item.transaction_date > today;
+  }
+
+  function transactionStatusLabel(item) {
+    if (item?.status === 'paid' && isFutureTransaction(item)) return 'Agendado';
+    return item?.status === 'pending' ? 'Pendente' : 'Pago';
+  }
+
   function paidTransactions() {
-    return state.transactions.filter((item) => item.status === 'paid');
+    const today = isoDate();
+    return state.transactions.filter((item) => item.status === 'paid' && (!item.transaction_date || item.transaction_date <= today));
   }
 
   function monthTransactions(key = currentMonthKey()) {
@@ -876,7 +886,7 @@
     const rows = state.transactions.slice(0, 6);
     $('#recent-transactions').innerHTML = rows.length ? rows.map((row) => {
       const category = categoryById(row.category_id);
-      return `<div class="transaction-row"><span class="transaction-icon">${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(row.description)}</strong><small>${escapeHTML(category.name)} · ${shortDateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</small></div><b class="${row.type === 'income' ? 'value-income' : 'value-expense'}">${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</b></div>`;
+      return `<div class="transaction-row"><span class="transaction-icon">${escapeHTML(category.icon)}</span><div><strong>${escapeHTML(row.description)}</strong><small>${escapeHTML(category.name)} · ${shortDateBR.format(new Date(`${row.transaction_date}T12:00:00`))}${row.status === 'paid' && isFutureTransaction(row) ? ' · Agendado' : ''}</small></div><b class="${row.type === 'income' ? 'value-income' : 'value-expense'}">${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</b></div>`;
     }).join('') : emptyState('⇄', 'Nenhum lançamento ainda', 'Adicione sua primeira entrada ou saída.');
   }
 
@@ -940,7 +950,7 @@
       const account = accountById(row.account_id);
       const goal = row.goal_id ? goalById(row.goal_id) : null;
       const details = [row.recurring ? 'Recorrente' : '', goal ? `Meta: ${goal.icon} ${goal.name} (${brl.format(Number(row.goal_amount || row.amount))})` : ''].filter(Boolean).join(' · ');
-      return `<tr><td><strong>${escapeHTML(row.description)}</strong>${details ? `<br><small>${escapeHTML(details)}</small>` : ''}</td><td><span class="category-pill">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</span></td><td>${escapeHTML(account.name)}</td><td>${dateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</td><td><span class="status-pill ${row.status === 'pending' ? 'pending' : ''}">${row.status === 'pending' ? 'Pendente' : 'Pago'}</span></td><td class="right ${row.type === 'income' ? 'value-income' : 'value-expense'}"><strong>${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</strong></td><td><div class="table-actions"><button class="row-button" data-edit-transaction="${row.id}" title="Editar">✎</button><button class="row-button" data-delete-transaction="${row.id}" title="Excluir">×</button></div></td></tr>`;
+      return `<tr><td><strong>${escapeHTML(row.description)}</strong>${details ? `<br><small>${escapeHTML(details)}</small>` : ''}</td><td><span class="category-pill">${escapeHTML(category.icon)} ${escapeHTML(category.name)}</span></td><td>${escapeHTML(account.name)}</td><td>${dateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</td><td><span class="status-pill ${row.status === 'pending' ? 'pending' : (isFutureTransaction(row) ? 'scheduled' : '')}">${transactionStatusLabel(row)}</span></td><td class="right ${row.type === 'income' ? 'value-income' : 'value-expense'}"><strong>${row.type === 'income' ? '+' : '−'} ${brl.format(Number(row.amount))}</strong></td><td><div class="table-actions"><button class="row-button" data-edit-transaction="${row.id}" title="Editar">✎</button><button class="row-button" data-delete-transaction="${row.id}" title="Excluir">×</button></div></td></tr>`;
     }).join('');
     $$('[data-edit-transaction]').forEach((button) => button.addEventListener('click', () => openTransactionModal(button.dataset.editTransaction)));
     $$('[data-delete-transaction]').forEach((button) => button.addEventListener('click', () => deleteTransaction(button.dataset.deleteTransaction)));
@@ -1339,7 +1349,13 @@
       if (!demoMode) await loadFinancialData();
       closeModals();
       renderAll();
-      toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento salvo');
+      const savedDate = $('#tx-date').value;
+      const savedStatus = $('#tx-status').value;
+      if (savedStatus === 'paid' && savedDate > isoDate()) {
+        toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento agendado', `O saldo será atualizado automaticamente em ${dateBR.format(new Date(`${savedDate}T12:00:00`))}.`, 'info');
+      } else {
+        toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento salvo');
+      }
     } catch (error) {
       toast('Não foi possível salvar', friendlyError(error), 'error');
     } finally {
@@ -1573,7 +1589,7 @@
 
   function exportCSV(monthFilter = null) {
     const source = monthFilter ? state.transactions.filter((row) => monthKey(row.transaction_date) === monthFilter) : state.transactions;
-    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Valor na meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.goal_id ? Number(row.goal_amount || row.amount).toFixed(2).replace('.', ',') : '', row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
+    const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Valor na meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.goal_id ? Number(row.goal_amount || row.amount).toFixed(2).replace('.', ',') : '', row.transaction_date, transactionStatusLabel(row), row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
     const csv = '\uFEFF' + rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
