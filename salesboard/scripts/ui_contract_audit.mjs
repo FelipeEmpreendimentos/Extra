@@ -26,7 +26,7 @@ for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']
   const source = fs.readFileSync(file, 'utf8');
   if (/\b(?:confirm|prompt|alert)\s*\(/.test(source)) failures.push(`static: diálogo nativo encontrado em ${file}`);
 }
-for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()', 'historicalAccount', 'historicalCategory']) {
+for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()', 'historicalAccount', 'historicalCategory', 'catalogItem.archived = true']) {
   if (!appSource.includes(marker)) failures.push(`static: contrato histórico ausente: ${marker}`);
 }
 
@@ -41,7 +41,6 @@ for (const viewport of viewports) {
     await page.goto(`${base}/app/?demo=1`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForSelector('#app-shell:not([hidden])', { timeout: 30000 });
 
-    // Billing/current-plan alignment: badge stays inside the card and labels never overlap.
     if (!(await openView(page, 'billing'))) throw new Error('view billing não encontrada');
     const billingGeometry = await page.evaluate(() => {
       const rect = (element) => {
@@ -111,10 +110,11 @@ for (const viewport of viewports) {
     await page.locator('#confirm-cancel').click();
 
     if (!(await openView(page, 'accounts'))) throw new Error('view accounts não encontrada');
-    await page.locator('[data-delete-account-row]').first().evaluate((element) => element.click());
+    const principalAccountCard = page.locator('#accounts-grid .entity-card').filter({ hasText: 'Conta principal' }).first();
+    if (!(await principalAccountCard.count())) throw new Error('card Conta principal não encontrado');
+    await principalAccountCard.locator('[data-delete-account-row]').evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
-    const accountTitle = await page.locator('#confirm-title').textContent();
-    if (!/Arquivar conta/.test(accountTitle || '')) fail(viewport, 'conta com histórico não oferece arquivamento');
+    if (!/Arquivar conta/.test((await page.locator('#confirm-title').textContent()) || '')) fail(viewport, 'conta com histórico não oferece arquivamento');
     await page.locator('#confirm-action').click();
     await page.waitForTimeout(120);
     if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada após arquivar conta');
@@ -122,10 +122,11 @@ for (const viewport of viewports) {
     if (!(await freelancerRow.count()) || !(await freelancerRow.innerText()).includes('Conta principal')) fail(viewport, 'histórico perdeu o nome da conta arquivada');
 
     if (!(await openView(page, 'categories'))) throw new Error('view categories não encontrada');
-    await page.locator('[data-delete-category-row]').first().evaluate((element) => element.click());
+    const moradiaCard = page.locator('#categories-grid .entity-card').filter({ hasText: 'Moradia' }).first();
+    if (!(await moradiaCard.count())) throw new Error('card Moradia não encontrado');
+    await moradiaCard.locator('[data-delete-category-row]').evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
-    const categoryTitle = await page.locator('#confirm-title').textContent();
-    if (!/Arquivar categoria/.test(categoryTitle || '')) fail(viewport, 'categoria com histórico não oferece arquivamento');
+    if (!/Arquivar categoria/.test((await page.locator('#confirm-title').textContent()) || '')) fail(viewport, 'categoria com histórico não oferece arquivamento');
     await page.locator('#confirm-action').click();
     await page.waitForTimeout(120);
     if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada após arquivar categoria');
