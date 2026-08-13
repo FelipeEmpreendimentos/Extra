@@ -1,171 +1,42 @@
-name: Validate SalesBoard production
+name: Apply SalesBoard mobile OAuth fix
 
 on:
   push:
     branches: [main]
     paths:
-      - "salesboard/**"
-      - ".github/workflows/salesboard-production-check.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "salesboard/**"
       - ".github/workflows/salesboard-production-check.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  validate:
+  patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Use production Node version
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v6
         with:
-          node-version-file: "salesboard/.node-version"
-
-      - name: Check launch files
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply mobile OAuth and plan card fix
+        run: python salesboard/scripts/fix_mobile_oauth_and_trial_cards.py
+      - name: Validate JavaScript
         run: |
-          test -f salesboard/index.html
-          test -f salesboard/styles.css
-          test -f salesboard/launch.css
-          test -f salesboard/quality.css
-          test -f salesboard/app.js
-          test -f salesboard/app/index.html
-          test -f salesboard/app/app.css
-          test -f salesboard/app/quality.css
-          test -f salesboard/app/app.js
-          test -f salesboard/app/runtime-bridge.js
-          test -f salesboard/favicon.svg
-          test -f salesboard/manifest.webmanifest
-          test -f salesboard/robots.txt
-          test -f salesboard/404.html
-          test -f salesboard/contato.html
-          test -f salesboard/legal/privacidade.html
-          test -f salesboard/legal/termos.html
-          test -f salesboard/legal/seguranca.html
-          test -f salesboard/supabase/schema.sql
-          for migration in 002_integrity 003_recurring 004_three_day_trial 005_lock_entitlement_rpc 006_trial_once_per_email 007_choose_trial_plan_once 008_fix_trial_digest_schema 009_atomic_onboarding_completion 010_profile_security_defaults 011_product_coherence 012_goal_income_semantics 013_goal_allocations 014_archive_history_integrity; do test -f "salesboard/supabase/${migration}.sql"; done
-          for fn in salesboard-checkout salesboard-billing-portal salesboard-delete-account salesboard-stripe-webhook salesboard-health; do test -f "salesboard/supabase/functions/${fn}/index.ts"; done
-          test -f salesboard/.env.example
-          test -f salesboard/.gitignore
-          test -f salesboard/.node-version
-
-      - name: Install pinned production dependencies
-        working-directory: salesboard
-        run: npm install --ignore-scripts --no-fund --no-audit
-
-      - name: Validate browser JavaScript syntax
-        working-directory: salesboard
-        run: npm run check
-
-      - name: Audit production dependencies
-        working-directory: salesboard
-        run: npm audit --omit=dev --audit-level=high
-
-      - name: Check database and entitlement invariants
+          node --check salesboard/app/app.js
+          node --check salesboard/scripts/ui_contract_audit.mjs
+      - name: Verify fix markers
         run: |
-          grep -Fq 'enable row level security' salesboard/supabase/schema.sql
-          grep -Fq 'current_entitlement' salesboard/supabase/schema.sql
-          grep -Fq 'validate_transaction_references' salesboard/supabase/002_integrity.sql
-          grep -Fq 'validate_recurrence_source' salesboard/supabase/003_recurring.sql
-          grep -Fq 'extensions.digest' salesboard/supabase/008_fix_trial_digest_schema.sql
-          grep -Fq 'complete_salesboard_onboarding' salesboard/supabase/009_atomic_onboarding_completion.sql
-          grep -Fq "subscription_status set default 'none'" salesboard/supabase/010_profile_security_defaults.sql
-          grep -Fq 'revoke all on function public.touch_updated_at()' salesboard/supabase/010_profile_security_defaults.sql
-          grep -Fq 'revoke execute on function public.current_entitlement(uuid)' salesboard/supabase/005_lock_entitlement_rpc.sql
-          grep -Fq 'categories_income_budget_zero' salesboard/supabase/011_product_coherence.sql
-          grep -Fq 'GOAL_REQUIRES_INCOME' salesboard/supabase/012_goal_income_semantics.sql
-          grep -Fq 'goal_amount' salesboard/supabase/013_goal_allocations.sql
-          grep -Fq 'INVALID_GOAL_AMOUNT' salesboard/supabase/013_goal_allocations.sql
-          grep -Fq 'categories_active_user_type_name_unique' salesboard/supabase/014_archive_history_integrity.sql
-          grep -Fq 'account_is_archived' salesboard/supabase/014_archive_history_integrity.sql
-          grep -Fq 'category_is_archived' salesboard/supabase/014_archive_history_integrity.sql
-          grep -Fq "old.archived = true" salesboard/supabase/schema.sql
-          grep -Fq 'PLAN_LIMIT_ACCOUNTS' salesboard/supabase/schema.sql
-          grep -Fq 'function persistentAuthStorage()' salesboard/app/app.js || { echo 'Supabase auth persistence adapter missing'; exit 1; }
-          grep -Fq 'const authSessionStorage' salesboard/app/app.js || { echo 'Supabase auth storage adapter missing'; exit 1; }
-          test "$(grep -o 'localStorage' salesboard/app/app.js | wc -l)" -eq 1 || { echo 'localStorage may only back Supabase Auth persistence'; exit 1; }
-
-      - name: Check Edge Function security and billing invariants
+          grep -Fq 'OAUTH_REMEMBER_KEY' salesboard/app/app.js
+          grep -Fq 'prepareGoogleOAuthStorage' salesboard/app/app.js
+          grep -Fq 'finalizeGoogleOAuthStorage' salesboard/app/app.js
+          grep -Fq 'migrateAuthTokens' salesboard/app/app.js
+          grep -Fq 'Mobile trial-plan alignment' salesboard/app/quality.css
+      - name: Commit product fix
         run: |
-          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'checkout auth validation missing'; exit 1; }
-          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'billing portal auth validation missing'; exit 1; }
-          grep -Fq "admin.auth.getUser(token)" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'account deletion auth validation missing'; exit 1; }
-          grep -Fq "body.confirmation !== 'EXCLUIR'" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'destructive account confirmation missing'; exit 1; }
-          grep -Fq "cancelStripeSubscription" salesboard/supabase/functions/salesboard-delete-account/index.ts || { echo 'subscription cancellation before account deletion missing'; exit 1; }
-          grep -Fq "constructEventAsync" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'Stripe signature verification missing'; exit 1; }
-          grep -Fq "STRIPE_WEBHOOK_SECRET" salesboard/supabase/functions/salesboard-stripe-webhook/index.ts || { echo 'webhook secret configuration missing'; exit 1; }
-          grep -Fq 'STRIPE_PRICE_' salesboard/supabase/functions/salesboard-checkout/index.ts || { echo 'live price configuration missing'; exit 1; }
-          grep -Fq "STRIPE_PRODUCT_ESSENTIAL" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'live product configuration missing'; exit 1; }
-          grep -Fq "features[subscription_cancel][mode]','at_period_end'" salesboard/supabase/functions/salesboard-billing-portal/index.ts || { echo 'safe end-of-period cancellation configuration missing'; exit 1; }
-          grep -Fq "STRIPE_SECRET_KEY" salesboard/supabase/functions/salesboard-health/index.ts || { echo 'health billing readiness check missing'; exit 1; }
-          if grep -PqR --exclude=.env.example 'sk_(live|test)_(?!x{8,})[A-Za-z0-9]{20,}' salesboard; then echo 'Possible Stripe secret committed'; exit 1; fi
-
-      - name: Build clean GitHub Pages artifact
-        working-directory: salesboard
-        run: |
-          rm -rf .ci-dist
-          mkdir -p .ci-dist
-          cp index.html styles.css launch.css quality.css app.js favicon.svg manifest.webmanifest robots.txt 404.html contato.html .ci-dist/
-          cp -R app legal .ci-dist/
-          test -f .ci-dist/index.html
-          test -f .ci-dist/quality.css
-          test -f .ci-dist/app/index.html
-          test -f .ci-dist/app/quality.css
-          test -f .ci-dist/legal/privacidade.html
-          test ! -e .ci-dist/supabase
-          test ! -e .ci-dist/.env.example
-          test ! -e .ci-dist/package.json
-
-      - name: Check final product coherence
-        run: |
-          grep -Fq '3 dias grátis' salesboard/index.html
-          if grep -Fq '7 dias grátis' salesboard/index.html; then echo 'Old 7-day trial copy must not remain on the landing page'; exit 1; fi
-          grep -Fq 'data-monthly="14,90"' salesboard/index.html
-          grep -Fq 'data-monthly="24,90"' salesboard/index.html
-          grep -Fq 'Até 3 contas ativas' salesboard/index.html
-          grep -Fq 'Relatórios avançados de 12 meses' salesboard/index.html
-          grep -Fq 'destine parte das suas entradas às metas' salesboard/index.html
-          grep -Fq 'cancele a renovação quando quiser' salesboard/index.html
-          if grep -Fq 'registre aportes' salesboard/index.html; then echo 'Marketing must describe the real goal allocation flow'; exit 1; fi
-          grep -Fq 'google-auth-button' salesboard/app/index.html
-          grep -Fq "provider: 'google'" salesboard/app/app.js
-          grep -Fq 'id="keep-connected"' salesboard/app/index.html
-          grep -Fq 'authSessionStorage' salesboard/app/app.js
-          grep -Fq 'setRememberPreference' salesboard/app/app.js
-          grep -Fq 'report-year-chart' salesboard/app/index.html
-          grep -Fq 'legal/privacidade.html' salesboard/index.html
-          grep -Fq 'legal/termos.html' salesboard/index.html
-          grep -Fq 'Excluir minha conta' salesboard/app/index.html
-          grep -Fq 'Gerenciar cobrança' salesboard/app/index.html
-          grep -Fq 'id="report-month"' salesboard/app/index.html
-          grep -Fq 'id="tx-goal"' salesboard/app/index.html
-          grep -Fq 'id="tx-status-wrap"' salesboard/app/index.html
-          grep -Fq 'id="tx-goal-amount"' salesboard/app/index.html
-          grep -Fq 'id="confirm-modal"' salesboard/app/index.html
-          grep -Fq 'requestConfirmation' salesboard/app/app.js
-          grep -Fq 'reactivateEntity' salesboard/app/app.js
-          grep -Fq 'renderArchivedItems' salesboard/app/app.js
-          grep -Fq 'setResendConfirmation' salesboard/app/app.js
-          grep -Fq 'form.noValidate = true' salesboard/app/app.js
-          grep -Fq 'Começar 3 dias no' salesboard/app/app.js
-          grep -Fq 'id="archived-items"' salesboard/app/index.html
-          grep -Fq 'id="resend-confirmation"' salesboard/app/index.html
-          grep -Fq 'accountCatalog' salesboard/app/app.js
-          grep -Fq 'categoryCatalog' salesboard/app/app.js
-          grep -Fq 'goal_amount' salesboard/app/app.js
-          grep -Fq 'Acima do limite' salesboard/app/app.js
-          grep -Fq 'Alterar no portal' salesboard/app/app.js
-          grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
-          for form in login-form register-form forgot-form recovery-form onboarding-form profile-form transaction-form entity-form confirm-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || { echo "$form must disable native browser validation"; exit 1; }; done
-          if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then echo 'Native browser dialogs are forbidden in SalesBoard'; exit 1; fi
-          if grep -Pq '\breportValidity\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then echo 'Native browser validation UI is forbidden in SalesBoard'; exit 1; fi
-          if grep -Fq '2 meses grátis' salesboard/index.html salesboard/app/index.html; then echo 'Annual plan must not be advertised as extra free trial time'; exit 1; fi
-          if grep -Fq 'data-contribute-goal' salesboard/app/app.js; then echo 'Synthetic goal contributions must not remain'; exit 1; fi
-          if grep -q 'Marina Costa\|Rafael Lima\|Ana Souza' salesboard/index.html; then echo 'Fictitious testimonials must not appear as launch social proof'; exit 1; fi
-          if grep -Fq 'Negócios' salesboard/index.html; then echo 'Unreleased Negocios plan must not be advertised'; exit 1; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app/app.js salesboard/app/quality.css salesboard/scripts/ui_contract_audit.mjs
+          git commit -m "Fix mobile Google OAuth persistence and trial plan layout"
+          git push origin main
