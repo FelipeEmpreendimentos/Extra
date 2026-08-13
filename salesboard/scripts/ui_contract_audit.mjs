@@ -21,10 +21,13 @@ async function openView(page, view) {
   return false;
 }
 
-// Static contract: browser-native dialogs are forbidden in the product UI.
+const appSource = fs.readFileSync('salesboard/app/app.js', 'utf8');
 for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']) {
   const source = fs.readFileSync(file, 'utf8');
   if (/\b(?:confirm|prompt|alert)\s*\(/.test(source)) failures.push(`static: diálogo nativo encontrado em ${file}`);
+}
+for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()']) {
+  if (!appSource.includes(marker)) failures.push(`static: catálogo histórico ausente: ${marker}`);
 }
 
 const browser = await chromium.launch({ headless: true });
@@ -76,21 +79,29 @@ for (const viewport of viewports) {
     if (!(await page.locator('#confirm-title').textContent()).includes('Excluir lançamento')) fail(viewport, 'confirmação de lançamento não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
-    // Conta: mesmo contrato visual. Conta com histórico deve ser arquivada.
+    // Conta com histórico deve usar Arquivar e preservar a identificação nos lançamentos antigos.
     if (!(await openView(page, 'accounts'))) throw new Error('view accounts não encontrada');
     await page.locator('[data-delete-account-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     const accountTitle = await page.locator('#confirm-title').textContent();
-    if (!/Excluir conta|Arquivar conta/.test(accountTitle || '')) fail(viewport, 'confirmação de conta não usa o modal padrão');
-    await page.locator('#confirm-cancel').click();
+    if (!/Arquivar conta/.test(accountTitle || '')) fail(viewport, 'conta com histórico não oferece arquivamento');
+    await page.locator('#confirm-action').click();
+    await page.waitForTimeout(120);
+    if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada após arquivar conta');
+    const freelancerRow = page.locator('#transactions-body tr').filter({ hasText: 'Projeto freelancer' }).first();
+    if (!(await freelancerRow.count()) || !(await freelancerRow.innerText()).includes('Conta principal')) fail(viewport, 'histórico perdeu o nome da conta arquivada');
 
-    // Categoria: mesmo contrato visual. Categoria com histórico deve ser arquivada.
+    // Categoria com histórico segue a mesma regra e mantém a descrição histórica.
     if (!(await openView(page, 'categories'))) throw new Error('view categories não encontrada');
     await page.locator('[data-delete-category-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     const categoryTitle = await page.locator('#confirm-title').textContent();
-    if (!/Excluir categoria|Arquivar categoria/.test(categoryTitle || '')) fail(viewport, 'confirmação de categoria não usa o modal padrão');
-    await page.locator('#confirm-cancel').click();
+    if (!/Arquivar categoria/.test(categoryTitle || '')) fail(viewport, 'categoria com histórico não oferece arquivamento');
+    await page.locator('#confirm-action').click();
+    await page.waitForTimeout(120);
+    if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada após arquivar categoria');
+    const rentRow = page.locator('#transactions-body tr').filter({ hasText: 'Aluguel' }).first();
+    if (!(await rentRow.count()) || !(await rentRow.innerText()).includes('Moradia')) fail(viewport, 'histórico perdeu o nome da categoria arquivada');
 
     // Meta usa o mesmo componente de confirmação.
     if (!(await openView(page, 'goals'))) throw new Error('view goals não encontrada');
@@ -112,4 +123,4 @@ if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('PASS UI contract: alignment + custom confirmations on desktop and mobile');
+console.log('PASS UI contract: alignment + custom confirmations + archived history preservation');
