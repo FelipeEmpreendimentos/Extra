@@ -50,6 +50,11 @@ jobs:
           grep -Fq 'setResendConfirmation' salesboard/app/app.js
           grep -Fq 'authCallbackMessage' salesboard/app/app.js
           grep -Fq 'error_description' salesboard/app/app.js
+          grep -Fq 'email_address_invalid' salesboard/app/app.js
+          grep -Fq 'session_not_found' salesboard/app/app.js
+          grep -Fq 'account_is_archived' salesboard/app/app.js
+          grep -Fq 'category_is_archived' salesboard/app/app.js
+          grep -Fq 'Não foi possível concluir esta ação de acesso' salesboard/app/app.js
           grep -Fq 'form.noValidate = true' salesboard/app/app.js
           grep -Fq 'id="archived-items"' salesboard/app/index.html
           grep -Fq 'aria-live="polite"' salesboard/app/index.html
