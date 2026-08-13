@@ -48,8 +48,11 @@ jobs:
         run: |
           grep -Fq 'reactivateEntity' salesboard/app/app.js
           grep -Fq 'setResendConfirmation' salesboard/app/app.js
+          grep -Fq 'authCallbackMessage' salesboard/app/app.js
+          grep -Fq 'error_description' salesboard/app/app.js
           grep -Fq 'form.noValidate = true' salesboard/app/app.js
           grep -Fq 'id="archived-items"' salesboard/app/index.html
+          grep -Fq 'aria-live="polite"' salesboard/app/index.html
           for form in login-form register-form forgot-form recovery-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || exit 1; done
           if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then echo 'Native browser dialog found'; exit 1; fi
           if grep -Pq '\breportValidity\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then echo 'Native validation UI found'; exit 1; fi
