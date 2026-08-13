@@ -105,3 +105,15 @@ canvas{max-width:100%!important}
 .keep-connected input{width:16px!important;height:16px;margin:0!important;accent-color:var(--greenDark);cursor:pointer}
 .keep-connected span{line-height:1.25}
 @media(max-width:420px){.auth-links{align-items:center;gap:10px}.keep-connected{font-size:11px}.auth-links .link-button{white-space:nowrap}}
+/* Mobile trial-plan alignment — badge must never overlap price */
+@media(max-width:760px){
+  .trial-plan-card.featured .trial-recommended{position:static;display:table;margin:0 0 14px auto}
+  .trial-plan-card .trial-plan-top{align-items:flex-start;min-width:0}
+  .trial-plan-card .trial-plan-top strong{position:relative;z-index:1}
+}
+@media(max-width:420px){
+  .trial-plan-card{padding:20px}
+  .trial-plan-card .trial-plan-top{gap:12px}
+  .trial-plan-card .trial-plan-top strong{font-size:23px}
+  .trial-plan-card .trial-plan-name{font-size:19px}
+}

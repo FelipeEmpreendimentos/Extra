@@ -15,6 +15,7 @@
   let session = null;
   const KEEP_CONNECTED_KEY = 'salesboard_keep_connected';
   const SESSION_ONLY_KEY = 'salesboard_session_only';
+  const OAUTH_REMEMBER_KEY = 'salesboard_oauth_remember';
   let rememberSession = false;
   let currentView = 'dashboard';
   let transactionFilter = 'all';
@@ -208,6 +209,14 @@
     const persistent = persistentAuthStorage();
     const transient = transientAuthStorage();
     try {
+      const oauthRemember = persistent?.getItem(OAUTH_REMEMBER_KEY);
+      if (oauthRemember === '0' || oauthRemember === '1') {
+        // OAuth may leave the app and return through another mobile browser process.
+        // Use persistent storage only for that round-trip; the user's preference is
+        // restored immediately after Supabase has rebuilt the session.
+        rememberSession = true;
+        return;
+      }
       if (transient?.getItem(SESSION_ONLY_KEY) === '1') {
         rememberSession = false;
         return;
@@ -247,9 +256,67 @@
     const transient = transientAuthStorage();
     try {
       persistent?.removeItem(KEEP_CONNECTED_KEY);
+      persistent?.removeItem(OAUTH_REMEMBER_KEY);
       transient?.removeItem(SESSION_ONLY_KEY);
     } catch {}
     rememberSession = false;
+  }
+
+  function authTokenKeys(storage) {
+    if (!storage) return [];
+    try {
+      return Object.keys(storage).filter((key) => key.startsWith('sb-') && key.endsWith('-auth-token'));
+    } catch {
+      return [];
+    }
+  }
+
+  function migrateAuthTokens(fromStorage, toStorage) {
+    if (!fromStorage || !toStorage || fromStorage === toStorage) return;
+    for (const key of authTokenKeys(fromStorage)) {
+      try {
+        const value = fromStorage.getItem(key);
+        if (value) toStorage.setItem(key, value);
+        fromStorage.removeItem(key);
+      } catch {}
+    }
+  }
+
+  function prepareGoogleOAuthStorage(shouldRemember) {
+    const persistent = persistentAuthStorage();
+    const transient = transientAuthStorage();
+    try {
+      persistent?.setItem(OAUTH_REMEMBER_KEY, shouldRemember ? '1' : '0');
+      transient?.removeItem(SESSION_ONLY_KEY);
+    } catch {}
+    // Google OAuth must survive leaving the current mobile webview/browser process.
+    rememberSession = true;
+  }
+
+  function finalizeGoogleOAuthStorage() {
+    const persistent = persistentAuthStorage();
+    const transient = transientAuthStorage();
+    let preference = null;
+    try { preference = persistent?.getItem(OAUTH_REMEMBER_KEY); } catch {}
+    if (preference !== '0' && preference !== '1') return;
+
+    const shouldRemember = preference === '1';
+    if (shouldRemember) {
+      migrateAuthTokens(transient, persistent);
+      rememberSession = true;
+      try {
+        persistent?.setItem(KEEP_CONNECTED_KEY, '1');
+        transient?.removeItem(SESSION_ONLY_KEY);
+      } catch {}
+    } else {
+      migrateAuthTokens(persistent, transient);
+      rememberSession = false;
+      try {
+        persistent?.removeItem(KEEP_CONNECTED_KEY);
+        transient?.setItem(SESSION_ONLY_KEY, '1');
+      } catch {}
+    }
+    try { persistent?.removeItem(OAUTH_REMEMBER_KEY); } catch {}
   }
 
   const authSessionStorage = {
@@ -481,6 +548,7 @@
     const { data, error } = await supabaseClient.auth.getSession();
     if (error) console.error(error);
     session = data?.session || null;
+    finalizeGoogleOAuthStorage();
 
     if (params.get('recovery') === '1') {
       if (session) {
@@ -1769,7 +1837,8 @@
   async function signInWithGoogle() {
     const button = $('#google-auth-button');
     if (!supabaseClient) return;
-    setRememberPreference(Boolean($('#keep-connected')?.checked));
+    const shouldRemember = Boolean($('#keep-connected')?.checked);
+    prepareGoogleOAuthStorage(shouldRemember);
     setButtonLoading(button, true, 'Verificando Google...');
     setAuthMessage('');
     try {
@@ -1783,7 +1852,7 @@
       }
 
       setButtonLoading(button, true, 'Abrindo Google...');
-      sessionStorage.setItem('salesboard_oauth_intent', JSON.stringify({ plan: requestedPlan, billing: billingCycle, createdAt: Date.now() }));
+      try { transientAuthStorage()?.setItem('salesboard_oauth_intent', JSON.stringify({ plan: requestedPlan, billing: billingCycle, createdAt: Date.now() })); } catch {}
       const { data, error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: appBaseUrl('oauth=google'), skipBrowserRedirect: true, queryParams: { prompt: 'select_account' } }

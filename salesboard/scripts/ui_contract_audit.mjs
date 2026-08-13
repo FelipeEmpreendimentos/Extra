@@ -37,7 +37,7 @@ for (const id of ['login-form', 'register-form', 'forgot-form', 'recovery-form',
 if (!appHtml.includes('id=\"archived-items\"')) failures.push('static: gerenciador de itens arquivados ausente');
 if (!appHtml.includes('id=\"resend-confirmation\"')) failures.push('static: ação de reenviar confirmação ausente');
 if (!appHtml.includes('id=\"keep-connected\"')) failures.push('static: opção Manter conectado ausente');
-for (const marker of ['authSessionStorage', 'setRememberPreference', 'KEEP_CONNECTED_KEY', 'SESSION_ONLY_KEY']) {
+for (const marker of ['authSessionStorage', 'setRememberPreference', 'KEEP_CONNECTED_KEY', 'SESSION_ONLY_KEY', 'OAUTH_REMEMBER_KEY', 'prepareGoogleOAuthStorage', 'finalizeGoogleOAuthStorage', 'migrateAuthTokens']) {
   if (!appSource.includes(marker)) failures.push(`static: persistência de sessão ausente: ${marker}`);
 }
 
