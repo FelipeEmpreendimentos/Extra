@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/salesboard-responsive-check.yml"
       - "salesboard/scripts/responsive_audit.mjs"
+      - "salesboard/scripts/ui_contract_audit.mjs"
       - "salesboard/index.html"
       - "salesboard/styles.css"
       - "salesboard/launch.css"
@@ -19,6 +20,7 @@ on:
     branches: ["main"]
     paths:
       - "salesboard/scripts/responsive_audit.mjs"
+      - "salesboard/scripts/ui_contract_audit.mjs"
       - "salesboard/index.html"
       - "salesboard/styles.css"
       - "salesboard/launch.css"
@@ -56,6 +58,8 @@ jobs:
           exit 1
       - name: Run reviewed product viewport matrix
         run: node salesboard/scripts/responsive_audit.mjs
+      - name: Run UI contract regressions
+        run: node salesboard/scripts/ui_contract_audit.mjs
       - name: Upload audit artifacts
         if: always()
         uses: actions/upload-artifact@v4
