@@ -87,7 +87,9 @@ jobs:
           grep -Fq 'category_is_archived' salesboard/supabase/014_archive_history_integrity.sql
           grep -Fq "old.archived = true" salesboard/supabase/schema.sql
           grep -Fq 'PLAN_LIMIT_ACCOUNTS' salesboard/supabase/schema.sql
-          if grep -Fq 'localStorage' salesboard/app/app.js; then echo 'Production app must not use localStorage as a financial database'; exit 1; fi
+          grep -Fq 'function persistentAuthStorage()' salesboard/app/app.js || { echo 'Supabase auth persistence adapter missing'; exit 1; }
+          grep -Fq 'const authSessionStorage' salesboard/app/app.js || { echo 'Supabase auth storage adapter missing'; exit 1; }
+          test "$(grep -o 'localStorage' salesboard/app/app.js | wc -l)" -eq 1 || { echo 'localStorage may only back Supabase Auth persistence'; exit 1; }
 
       - name: Check Edge Function security and billing invariants
         run: |
@@ -133,6 +135,9 @@ jobs:
           if grep -Fq 'registre aportes' salesboard/index.html; then echo 'Marketing must describe the real goal allocation flow'; exit 1; fi
           grep -Fq 'google-auth-button' salesboard/app/index.html
           grep -Fq "provider: 'google'" salesboard/app/app.js
+          grep -Fq 'id="keep-connected"' salesboard/app/index.html
+          grep -Fq 'authSessionStorage' salesboard/app/app.js
+          grep -Fq 'setRememberPreference' salesboard/app/app.js
           grep -Fq 'report-year-chart' salesboard/app/index.html
           grep -Fq 'legal/privacidade.html' salesboard/index.html
           grep -Fq 'legal/termos.html' salesboard/index.html
@@ -157,7 +162,7 @@ jobs:
           grep -Fq 'Acima do limite' salesboard/app/app.js
           grep -Fq 'Alterar no portal' salesboard/app/app.js
           grep -Fq 'O período começa só depois da sua escolha' salesboard/index.html
-          for form in login-form register-form forgot-form recovery-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || { echo "$form must disable native browser validation"; exit 1; }; done
+          for form in login-form register-form forgot-form recovery-form onboarding-form profile-form transaction-form entity-form confirm-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || { echo "$form must disable native browser validation"; exit 1; }; done
           if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then echo 'Native browser dialogs are forbidden in SalesBoard'; exit 1; fi
           if grep -Pq '\breportValidity\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then echo 'Native browser validation UI is forbidden in SalesBoard'; exit 1; fi
           if grep -Fq '2 meses grátis' salesboard/index.html salesboard/app/index.html; then echo 'Annual plan must not be advertised as extra free trial time'; exit 1; fi
