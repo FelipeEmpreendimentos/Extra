@@ -73,7 +73,7 @@ canvas{max-width:100%!important}
 .transaction-grid>label{align-self:start;align-content:start;min-width:0}
 .transaction-grid>label>input,.transaction-grid>label>select,.transaction-grid>label>.money-field{width:100%}
 .transaction-grid .field-help{margin-top:0;min-height:30px}
-.transaction-grid .check{align-self:start!important;min-height:44px;align-items:center!important;margin:0!important;padding:0 4px!important}
+.transaction-grid .check{align-self:start!important;min-height:44px;align-items:center!important;margin:0!important;padding:0!important}
 .transaction-grid .check input{margin:0!important}
 .transaction-grid #tx-goal-wrap,.transaction-grid #tx-goal-amount-wrap{align-self:start}
 .transaction-grid #tx-status{height:44px}
