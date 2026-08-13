@@ -1,10 +1,17 @@
 import { chromium } from 'playwright';
+import fs from 'node:fs';
 
 const base = process.env.AUDIT_BASE_URL || 'http://127.0.0.1:4173/salesboard';
 const viewports = [{ width: 1366, height: 768 }, { width: 390, height: 844 }];
 const failures = [];
 
 function fail(viewport, message) { failures.push(`${viewport.width}x${viewport.height}: ${message}`); }
+
+// Static contract: browser-native dialogs are forbidden in the product UI.
+for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']) {
+  const source = fs.readFileSync(file, 'utf8');
+  if (/\b(?:confirm|prompt|alert)\s*\(/.test(source)) failures.push(`static: diálogo nativo encontrado em ${file}`);
+}
 
 const browser = await chromium.launch({ headless: true });
 for (const viewport of viewports) {
@@ -25,24 +32,26 @@ for (const viewport of viewports) {
     const alignment = await page.evaluate(() => {
       const rect = (selector) => {
         const r = document.querySelector(selector)?.getBoundingClientRect();
-        return r ? { top: r.top, left: r.left, width: r.width, height: r.height, bottom: r.bottom } : null;
+        return r ? { top: r.top, left: r.left, right: r.right, width: r.width, height: r.height, bottom: r.bottom } : null;
       };
       return {
-        goalLabel: rect('#tx-goal-wrap'),
-        statusLabel: rect('#tx-status')?.top,
         goalControl: rect('#tx-goal'),
         statusControl: rect('#tx-status'),
         accountControl: rect('#tx-account'),
-        categoryControl: rect('#tx-category')
+        categoryControl: rect('#tx-category'),
+        modal: rect('#transaction-modal .modal-card')
       };
     });
 
     if (!alignment.goalControl || !alignment.statusControl) fail(viewport, 'campos Meta/Status não foram encontrados');
-    else {
+    else if (viewport.width > 680) {
       if (Math.abs(alignment.goalControl.top - alignment.statusControl.top) > 2) fail(viewport, `Meta e Status desalinhados em ${Math.abs(alignment.goalControl.top - alignment.statusControl.top).toFixed(1)}px`);
       if (Math.abs(alignment.goalControl.height - alignment.statusControl.height) > 2) fail(viewport, 'Meta e Status com alturas diferentes');
+      if (alignment.accountControl && alignment.categoryControl && Math.abs(alignment.accountControl.top - alignment.categoryControl.top) > 2) fail(viewport, 'Categoria e Conta desalinhadas');
+    } else {
+      if (alignment.goalControl.width < viewport.width * 0.7 || alignment.statusControl.width < viewport.width * 0.7) fail(viewport, 'campos do lançamento estreitos demais no celular');
+      if (alignment.modal && (alignment.modal.left < -1 || alignment.modal.right > viewport.width + 1)) fail(viewport, 'modal de lançamento ultrapassa a largura do celular');
     }
-    if (alignment.accountControl && alignment.categoryControl && Math.abs(alignment.accountControl.top - alignment.categoryControl.top) > 2) fail(viewport, 'Categoria e Conta desalinhadas');
 
     await page.locator('#transaction-modal [data-close-modal]').first().click();
 
@@ -53,7 +62,7 @@ for (const viewport of viewports) {
     if (!(await page.locator('#confirm-title').textContent()).includes('Excluir lançamento')) fail(viewport, 'confirmação de lançamento não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
-    // Conta: mesmo contrato visual.
+    // Conta: mesmo contrato visual. Conta com histórico deve ser arquivada.
     await page.locator('[data-view="accounts"]').first().click();
     await page.locator('[data-delete-account-row]').first().click();
     await page.waitForSelector('#confirm-modal:not([hidden])');
@@ -61,12 +70,19 @@ for (const viewport of viewports) {
     if (!/Excluir conta|Arquivar conta/.test(accountTitle || '')) fail(viewport, 'confirmação de conta não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
-    // Categoria: mesmo contrato visual.
+    // Categoria: mesmo contrato visual. Categoria com histórico deve ser arquivada.
     await page.locator('[data-view="categories"]').first().click();
     await page.locator('[data-delete-category-row]').first().click();
     await page.waitForSelector('#confirm-modal:not([hidden])');
     const categoryTitle = await page.locator('#confirm-title').textContent();
     if (!/Excluir categoria|Arquivar categoria/.test(categoryTitle || '')) fail(viewport, 'confirmação de categoria não usa o modal padrão');
+    await page.locator('#confirm-cancel').click();
+
+    // Meta usa o mesmo componente de confirmação.
+    await page.locator('[data-view="goals"]').first().click();
+    await page.locator('[data-delete-goal-row]').first().click();
+    await page.waitForSelector('#confirm-modal:not([hidden])');
+    if (!(await page.locator('#confirm-title').textContent()).includes('Excluir meta')) fail(viewport, 'confirmação de meta não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
     if (nativeDialogs.length) fail(viewport, `diálogo nativo detectado: ${nativeDialogs.join(' | ')}`);
