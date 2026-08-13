@@ -1,0 +1,44 @@
+name: Add SalesBoard keep-connected option
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "salesboard/scripts/add_keep_connected.py"
+      - ".github/workflows/salesboard-keep-connected-temp.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Apply keep-connected patch
+        run: python salesboard/scripts/add_keep_connected.py
+      - name: Validate JavaScript
+        run: |
+          node --check salesboard/app/app.js
+          node --check salesboard/scripts/ui_contract_audit.mjs
+      - name: Verify feature contract
+        run: |
+          grep -Fq 'id="keep-connected"' salesboard/app/index.html
+          grep -Fq 'authSessionStorage' salesboard/app/app.js
+          grep -Fq 'setRememberPreference' salesboard/app/app.js
+          grep -Fq 'KEEP_CONNECTED_KEY' salesboard/app/app.js
+          grep -Fq 'SESSION_ONLY_KEY' salesboard/app/app.js
+          grep -Fq 'Manter conectado' salesboard/app/index.html
+      - name: Commit feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add salesboard/app/app.js salesboard/app/index.html salesboard/app/quality.css salesboard/scripts/ui_contract_audit.mjs
+          git commit -m "Add keep-connected login option"
+          git push origin main
