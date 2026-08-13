@@ -22,13 +22,20 @@ async function openView(page, view) {
 }
 
 const appSource = fs.readFileSync('salesboard/app/app.js', 'utf8');
-for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']) {
+for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js', 'salesboard/app.js', 'salesboard/legal/legal.js']) {
   const source = fs.readFileSync(file, 'utf8');
   if (/\b(?:confirm|prompt|alert)\s*\(/.test(source)) failures.push(`static: diálogo nativo encontrado em ${file}`);
 }
 for (const marker of ['accountCatalog', 'categoryCatalog', 'allAccounts()', 'allCategories()', 'historicalAccount', 'historicalCategory', 'catalogItem.archived = true']) {
   if (!appSource.includes(marker)) failures.push(`static: contrato histórico ausente: ${marker}`);
 }
+
+const appHtml = fs.readFileSync('salesboard/app/index.html', 'utf8');
+for (const id of ['login-form', 'register-form', 'forgot-form', 'recovery-form']) {
+  if (!new RegExp(`<form id=\"${id}\"[^>]*novalidate`).test(appHtml)) failures.push(`static: formulário ${id} ainda permite validação nativa`);
+}
+if (!appHtml.includes('id=\"archived-items\"')) failures.push('static: gerenciador de itens arquivados ausente');
+if (!appHtml.includes('id=\"resend-confirmation\"')) failures.push('static: ação de reenviar confirmação ausente');
 
 const browser = await chromium.launch({ headless: true });
 for (const viewport of viewports) {
@@ -145,6 +152,35 @@ for (const viewport of viewports) {
     if (!archivedEdit.categoryValue || !archivedEdit.categoryText.includes('Moradia') || !archivedEdit.categoryText.includes('Arquivada')) fail(viewport, 'edição histórica não preserva a categoria arquivada');
     await page.locator('#transaction-modal [data-close-modal]').first().evaluate((element) => element.click());
 
+    // Arquivamento é reversível pela própria interface e usa o mesmo modal padrão.
+    if (!(await openView(page, 'settings'))) throw new Error('view settings não encontrada');
+    const archivedPanelText = await page.locator('#archived-items').innerText();
+    if (!archivedPanelText.includes('Conta principal') || !archivedPanelText.includes('Moradia')) fail(viewport, 'itens arquivados não aparecem no gerenciador');
+    const reactivateAccount = page.locator('[data-reactivate-entity=\"account\"][data-reactivate-id=\"a1\"]');
+    if (!(await reactivateAccount.count())) fail(viewport, 'ação de reativar conta ausente');
+    else {
+      await reactivateAccount.click();
+      await page.waitForSelector('#confirm-modal:not([hidden])');
+      if (!(await page.locator('#confirm-title').textContent()).includes('Reativar conta')) fail(viewport, 'reativação de conta não usa confirmação padrão');
+      if (!(await page.locator('#confirm-action').getAttribute('class') || '').includes('primary')) fail(viewport, 'reativação usa tom visual destrutivo');
+      await page.locator('#confirm-action').click();
+    }
+    const reactivateCategory = page.locator('[data-reactivate-entity=\"category\"][data-reactivate-id=\"c3\"]');
+    if (!(await reactivateCategory.count())) fail(viewport, 'ação de reativar categoria ausente');
+    else {
+      await reactivateCategory.click();
+      await page.waitForSelector('#confirm-modal:not([hidden])');
+      if (!(await page.locator('#confirm-title').textContent()).includes('Reativar categoria')) fail(viewport, 'reativação de categoria não usa confirmação padrão');
+      await page.locator('#confirm-action').click();
+    }
+    await page.waitForTimeout(120);
+    await page.locator('#quick-add').evaluate((element) => element.click());
+    await page.locator('input[name=\"transaction_type\"][value=\"expense\"]').check();
+    await page.waitForTimeout(80);
+    const restoredOptions = await page.evaluate(() => ({ account: [...document.querySelector('#tx-account').options].some((option) => option.value === 'a1'), category: [...document.querySelector('#tx-category').options].some((option) => option.value === 'c3') }));
+    if (!restoredOptions.account || !restoredOptions.category) fail(viewport, 'item reativado não voltou às opções de novo lançamento');
+    await page.locator('#transaction-modal [data-close-modal]').first().evaluate((element) => element.click());
+
     if (!(await openView(page, 'goals'))) throw new Error('view goals não encontrada');
     await page.locator('[data-delete-goal-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
@@ -164,4 +200,4 @@ if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('PASS UI contract: alignment + billing/sidebar + confirmations + archive history + historical editing');
+console.log('PASS UI contract: alignment + billing/sidebar + confirmations + auth validation + archive/reactivate + historical editing');

@@ -79,12 +79,15 @@
   function toast(title, message = '', type = 'success') {
     const stack = $('#toast-stack');
     if (!stack) return;
+    const normalizedType = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info';
+    const icons = { success: '✓', error: '!', warning: '!', info: 'i' };
     const item = document.createElement('div');
-    item.className = `toast ${type}`;
-    item.innerHTML = `<span>${type === 'error' ? '!' : '✓'}</span><div><strong>${escapeHTML(title)}</strong>${message ? `<p>${escapeHTML(message)}</p>` : ''}</div><button aria-label="Fechar">×</button>`;
+    item.className = `toast ${normalizedType}`;
+    item.setAttribute('role', ['error', 'warning'].includes(normalizedType) ? 'alert' : 'status');
+    item.innerHTML = `<span>${icons[normalizedType]}</span><div><strong>${escapeHTML(title)}</strong>${message ? `<p>${escapeHTML(message)}</p>` : ''}</div><button type="button" aria-label="Fechar notificação">×</button>`;
     item.querySelector('button').addEventListener('click', () => item.remove());
     stack.appendChild(item);
-    setTimeout(() => item.remove(), 4800);
+    setTimeout(() => item.remove(), normalizedType === 'error' ? 6500 : 4800);
   }
 
   let confirmationState = null;
@@ -104,7 +107,8 @@
     confirmLabel = 'Excluir',
     cancelLabel = 'Cancelar',
     requireText = '',
-    details = []
+    details = [],
+    tone = 'danger'
   }) {
     return new Promise((resolve) => {
       if (confirmationState?.resolve) closeConfirmation(false);
@@ -125,6 +129,7 @@
       messageNode.textContent = message || 'Revise esta ação antes de continuar.';
       confirmButton.textContent = confirmLabel;
       cancelButton.textContent = cancelLabel;
+      confirmButton.className = `button ${tone === 'primary' ? 'primary' : 'danger-solid'}`;
 
       const safeDetails = Array.isArray(details) ? details.filter(Boolean) : [];
       detailsNode.hidden = safeDetails.length === 0;
@@ -197,6 +202,7 @@
     if (message.includes('provider is not enabled')) return 'O login com Google ainda não foi ativado no servidor. Use e-mail e senha por enquanto.';
     if (code === 'user_already_exists' || message.includes('already registered') || message.includes('already exists')) return 'Já existe uma conta com este e-mail. Entre normalmente ou use “Esqueci a senha”.';
     if (message.includes('password should be')) return 'A senha não atende aos requisitos de segurança. Use pelo menos 8 caracteres.';
+    if (code.includes('otp_expired') || code.includes('token_expired') || message.includes('otp expired') || message.includes('token has expired') || message.includes('invalid token')) return 'Este link não é mais válido. Solicite um novo link e use apenas o e-mail mais recente.';
     return friendlyError(error);
   }
 
@@ -206,6 +212,25 @@
     box.hidden = !message;
     box.textContent = message || '';
     box.classList.toggle('error', Boolean(error));
+  }
+
+  function isValidEmail(value) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+  }
+
+  function focusField(selector) {
+    const field = $(selector);
+    if (!field) return;
+    field.focus({ preventScroll: true });
+    field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function setResendConfirmation(email = '') {
+    const button = $('#resend-confirmation');
+    if (!button) return;
+    const normalized = String(email || '').trim();
+    button.dataset.email = normalized;
+    button.hidden = !normalized;
   }
 
   async function waitForBillingSync(attempts = 8) {
@@ -357,8 +382,14 @@
     if (error) console.error(error);
     session = data?.session || null;
 
-    if (params.get('recovery') === '1' && session) {
-      showOnly('recovery-screen');
+    if (params.get('recovery') === '1') {
+      if (session) {
+        showOnly('recovery-screen');
+      } else {
+        $('#forgot-email').value = '';
+        setInlineMessage('#forgot-status', 'Este link de recuperação é inválido ou expirou. Solicite um novo link para continuar.', true);
+        showOnly('forgot-screen');
+      }
       return;
     }
 
@@ -381,6 +412,7 @@
     $('#auth-login-pane').hidden = !login;
     $('#auth-register-pane').hidden = login;
     setAuthMessage('');
+    setResendConfirmation('');
   }
 
   async function trialEligible() {
@@ -399,6 +431,16 @@
 
   async function startTrial(plan, button) {
     if (!['essential', 'pro'].includes(plan) || demoMode) return;
+    const planLabel = plan === 'essential' ? 'Essencial' : 'Pro';
+    const confirmed = await requestConfirmation({
+      title: `Começar 3 dias no ${planLabel}?`,
+      message: 'Seu período de 72 horas começa imediatamente após esta confirmação.',
+      confirmLabel: 'Começar agora',
+      cancelLabel: 'Voltar',
+      tone: 'primary',
+      details: ['Não é necessário cadastrar cartão.', 'A experiência é única por conta/e-mail.', 'Depois de iniciada, ela não reinicia ao trocar de plano.']
+    });
+    if (!confirmed) return;
     const buttons = $$('[data-start-trial]');
     buttons.forEach((item) => { item.disabled = true; });
     setButtonLoading(button, true, 'Preparando seu acesso...');
@@ -581,7 +623,7 @@
     state.categoryCatalog = [...state.categories];
     enterApp();
     $('#demo-badge').hidden = false;
-    toast('Modo demonstração', 'Os dados desta tela são fictícios e não são enviados para um servidor.');
+    toast('Modo demonstração', 'Os dados desta tela são fictícios e não são enviados para um servidor.', 'info');
   }
 
   function enterApp() {
@@ -591,7 +633,7 @@
     switchView(currentView);
     const checkout = params.get('checkout');
     if (checkout === 'success') toast('Checkout concluído', 'A assinatura será liberada assim que o Stripe confirmar o evento.');
-    if (checkout === 'cancelled') toast('Checkout cancelado', 'Nenhuma cobrança foi concluída.', 'error');
+    if (checkout === 'cancelled') toast('Checkout cancelado', 'Nenhuma cobrança foi concluída.', 'info');
   }
 
   function renderIdentity() {
@@ -639,6 +681,7 @@
     renderGoals();
     renderReports();
     renderBilling();
+    renderArchivedItems();
     renderSelectOptions();
     renderFeatureLocks();
   }
@@ -1025,7 +1068,7 @@
 
   function switchView(view) {
     if (view === 'goals' && !hasPro()) {
-      toast('Recurso Pro', 'Metas financeiras fazem parte do plano Pro.', 'error');
+      toast('Recurso Pro', 'Metas financeiras fazem parte do plano Pro.', 'warning');
       view = 'billing';
     }
     currentView = view;
@@ -1160,7 +1203,7 @@
       return;
     }
     if (mode === 'goal' && !hasPro()) {
-      toast('Recurso Pro', 'Metas financeiras fazem parte do plano Pro.', 'error');
+      toast('Recurso Pro', 'Metas financeiras fazem parte do plano Pro.', 'warning');
       switchView('billing');
       return;
     }
@@ -1303,6 +1346,56 @@
     }
   }
 
+
+
+  function renderArchivedItems() {
+    const container = $('#archived-items');
+    if (!container) return;
+    const archived = [
+      ...allAccounts().filter((item) => item.archived).map((item) => ({ ...item, entityKind: 'account', entityLabel: 'Conta', detail: accountTypeLabel(item.type) })),
+      ...allCategories().filter((item) => item.archived).map((item) => ({ ...item, entityKind: 'category', entityLabel: 'Categoria', detail: item.type === 'expense' ? 'Saída' : 'Entrada' }))
+    ];
+    $('#archived-count').textContent = String(archived.length);
+    container.innerHTML = archived.length ? archived.map((item) => `<div class="archived-row"><span class="archived-icon" style="background:${escapeHTML(item.color || '#64748b')}18;color:${escapeHTML(item.color || '#64748b')}">${escapeHTML(item.icon || '•')}</span><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(item.entityLabel)} · ${escapeHTML(item.detail)}</small></div><button type="button" class="button subtle compact" data-reactivate-entity="${item.entityKind}" data-reactivate-id="${item.id}">Reativar</button></div>`).join('') : '<div class="archived-empty"><span>✓</span><div><strong>Nenhum item arquivado</strong><small>Contas e categorias arquivadas aparecerão aqui para você reativar quando precisar.</small></div></div>';
+    $$('[data-reactivate-entity]').forEach((button) => button.addEventListener('click', () => reactivateEntity(button.dataset.reactivateEntity, button.dataset.reactivateId)));
+  }
+
+  async function reactivateEntity(mode, id) {
+    const isAccount = mode === 'account';
+    const catalog = isAccount ? allAccounts() : allCategories();
+    const row = catalog.find((item) => item.id === id && item.archived);
+    if (!row) {
+      toast('Item indisponível', 'Atualize os dados e tente novamente.', 'warning');
+      return;
+    }
+    const label = isAccount ? 'conta' : 'categoria';
+    const confirmed = await requestConfirmation({
+      title: `Reativar ${label}?`,
+      message: `“${row.name}” voltará a ficar disponível para novos lançamentos.`,
+      confirmLabel: 'Reativar',
+      tone: 'primary',
+      details: ['Todo o histórico anterior continua preservado.', isAccount ? 'No Essencial, o limite de até 3 contas ativas continua valendo.' : 'A categoria voltará às opções compatíveis com o tipo dela.']
+    });
+    if (!confirmed) return;
+    try {
+      if (demoMode) {
+        row.archived = false;
+        const active = isAccount ? state.accounts : state.categories;
+        if (!active.some((item) => item.id === row.id)) active.push(row);
+      } else {
+        const table = isAccount ? 'accounts' : 'categories';
+        const { error } = await supabaseClient.from(table).update({ archived: false }).eq('id', id).eq('user_id', state.user.id);
+        if (error) throw error;
+        await loadFinancialData();
+      }
+      renderAll();
+      toast(`${isAccount ? 'Conta' : 'Categoria'} reativada`, `“${row.name}” já pode ser usada novamente.`);
+    } catch (error) {
+      toast('Não foi possível reativar', friendlyError(error), 'error');
+    }
+  }
+
+
   function exportCSV(monthFilter = null) {
     const source = monthFilter ? state.transactions.filter((row) => monthKey(row.transaction_date) === monthFilter) : state.transactions;
     const rows = [['Descrição', 'Tipo', 'Categoria', 'Conta', 'Meta', 'Valor na meta', 'Data', 'Status', 'Recorrente', 'Valor'], ...source.map((row) => [row.description, row.type === 'income' ? 'Entrada' : 'Saída', categoryById(row.category_id).name, accountById(row.account_id).name, goalById(row.goal_id)?.name || '', row.goal_id ? Number(row.goal_amount || row.amount).toFixed(2).replace('.', ',') : '', row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não', Number(row.amount).toFixed(2).replace('.', ',')])];
@@ -1319,7 +1412,7 @@
 
   async function subscribe(plan) {
     if (demoMode) {
-      toast('Demonstração', 'A cobrança real fica disponível somente no ambiente de produção.');
+      toast('Demonstração', 'A cobrança real fica disponível somente no ambiente de produção.', 'info');
       return;
     }
     try {
@@ -1329,7 +1422,7 @@
       const response = await fetch('/api/checkout', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ plan, billingCycle, requestId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}` }) });
       const payload = await response.json();
       if (response.status === 409 && payload.code === 'SUBSCRIPTION_EXISTS') {
-        toast('Assinatura já existente', payload.error, 'error');
+        toast('Assinatura já existente', payload.error, 'warning');
         return;
       }
       if (!response.ok || !payload.url) throw new Error(payload.error || 'Checkout indisponível.');
@@ -1341,7 +1434,7 @@
 
   async function openBillingPortal() {
     if (demoMode) {
-      toast('Demonstração', 'O portal de cobrança é ativado no ambiente de produção.');
+      toast('Demonstração', 'O portal de cobrança é ativado no ambiente de produção.', 'info');
       return;
     }
     try {
@@ -1358,7 +1451,7 @@
 
   async function refreshAll() {
     if (demoMode) {
-      toast('Demonstração atualizada');
+      toast('Demonstração atualizada', '', 'info');
       return;
     }
     const button = $('#refresh-data');
@@ -1475,7 +1568,7 @@
 
   async function deleteAccountPermanently() {
     if (demoMode) {
-      toast('Demonstração', 'A exclusão real só existe no ambiente de produção.');
+      toast('Demonstração', 'A exclusão real só existe no ambiente de produção.', 'info');
       return;
     }
     const confirmed = await requestConfirmation({
@@ -1581,6 +1674,12 @@
   }
 
   function initStaticEvents() {
+    ['#login-form', '#register-form', '#forgot-form', '#recovery-form'].forEach((selector) => {
+      const form = $(selector);
+      if (!form) return;
+      form.noValidate = true;
+      form.setAttribute('novalidate', 'novalidate');
+    });
     $('#google-auth-button')?.addEventListener('click', signInWithGoogle);
     $$('[data-auth-mode]').forEach((button) => button.addEventListener('click', () => setAuthMode(button.dataset.authMode)));
     $$('[data-toggle-password]').forEach((button) => button.addEventListener('click', () => {
@@ -1590,15 +1689,22 @@
     $('#login-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = event.currentTarget.querySelector('button[type="submit"]');
-      setButtonLoading(button, true, 'Entrando...');
+      const email = $('#login-email').value.trim();
+      const password = $('#login-password').value;
       setAuthMessage('');
+      setResendConfirmation('');
+      if (!isValidEmail(email)) { setAuthMessage('Informe um e-mail válido para entrar.', true); focusField('#login-email'); return; }
+      if (!password) { setAuthMessage('Informe sua senha para entrar.', true); focusField('#login-password'); return; }
+      setButtonLoading(button, true, 'Entrando...');
       try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email: $('#login-email').value.trim(), password: $('#login-password').value });
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
         session = data.session;
         await initializeAuthenticatedUser();
       } catch (error) {
         setAuthMessage(authErrorMessage(error), true);
+        const rawAuthError = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+        if (rawAuthError.includes('email_not_confirmed') || rawAuthError.includes('email not confirmed')) setResendConfirmation(email);
       } finally {
         setButtonLoading(button, false);
       }
@@ -1606,18 +1712,24 @@
     $('#register-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = event.currentTarget.querySelector('button[type="submit"]');
-      if (!$('#accept-terms').checked) return;
-      setButtonLoading(button, true, 'Criando conta...');
+      const name = $('#register-name').value.trim();
+      const email = $('#register-email').value.trim();
+      const password = $('#register-password').value;
       setAuthMessage('');
+      setResendConfirmation('');
+      if (!name) { setAuthMessage('Informe seu nome para criar a conta.', true); focusField('#register-name'); return; }
+      if (!isValidEmail(email)) { setAuthMessage('Informe um e-mail válido para criar a conta.', true); focusField('#register-email'); return; }
+      if (password.length < 8) { setAuthMessage('Crie uma senha com pelo menos 8 caracteres.', true); focusField('#register-password'); return; }
+      if (!$('#accept-terms').checked) { setAuthMessage('Aceite os Termos de Uso e a Política de Privacidade para continuar.', true); focusField('#accept-terms'); return; }
+      setButtonLoading(button, true, 'Criando conta...');
       try {
-        const email = $('#register-email').value.trim();
         const { data, error } = await supabaseClient.auth.signUp({
           email,
-          password: $('#register-password').value,
+          password,
           options: {
             emailRedirectTo: `${location.origin}${location.pathname}`,
             data: {
-              full_name: $('#register-name').value.trim(),
+              full_name: name,
               selected_plan: requestedPlan,
               terms_accepted_at: new Date().toISOString(),
               terms_version: '2026-08-12'
@@ -1629,9 +1741,10 @@
           session = data.session;
           await initializeAuthenticatedUser();
         } else {
-          setAuthMessage(`Conta criada. Enviamos uma confirmação para ${email}. Confirme o e-mail e depois entre no SalesBoard.`);
           setAuthMode('login');
           $('#login-email').value = email;
+          setAuthMessage(`Conta criada. Enviamos uma confirmação para ${email}. Confirme o e-mail e depois entre no SalesBoard.`);
+          setResendConfirmation(email);
         }
       } catch (error) {
         setAuthMessage(authErrorMessage(error), true);
@@ -1649,8 +1762,9 @@
       event.preventDefault();
       const button = event.currentTarget.querySelector('button[type="submit"]');
       const email = $('#forgot-email').value.trim();
-      setButtonLoading(button, true, 'Enviando...');
       setInlineMessage('#forgot-status', '');
+      if (!isValidEmail(email)) { setInlineMessage('#forgot-status', 'Informe um e-mail válido para recuperar o acesso.', true); focusField('#forgot-email'); return; }
+      setButtonLoading(button, true, 'Enviando...');
       try {
         const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo: appBaseUrl('recovery=1') });
         if (error) throw error;
