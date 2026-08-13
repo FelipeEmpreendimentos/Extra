@@ -47,7 +47,7 @@ jobs:
           test -f .pages-dist/salesboard/app/quality.css
 
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload SalesBoard
         uses: actions/upload-pages-artifact@v4
