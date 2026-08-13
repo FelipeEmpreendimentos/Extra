@@ -56,10 +56,10 @@ jobs:
           for i in {1..30}; do curl -fsS http://127.0.0.1:4173/salesboard/ >/dev/null && exit 0; sleep 1; done
           cat /tmp/salesboard-http.log
           exit 1
-      - name: Run reviewed product viewport matrix
-        run: node salesboard/scripts/responsive_audit.mjs
       - name: Run UI contract regressions
         run: node salesboard/scripts/ui_contract_audit.mjs
+      - name: Run reviewed product viewport matrix
+        run: node salesboard/scripts/responsive_audit.mjs
       - name: Upload audit artifacts
         if: always()
         uses: actions/upload-artifact@v4
