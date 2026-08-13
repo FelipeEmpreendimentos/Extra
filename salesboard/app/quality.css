@@ -100,3 +100,8 @@ canvas{max-width:100%!important}
   .transaction-grid .field-help{min-height:0}
   .confirm-content{grid-template-columns:42px minmax(0,1fr);gap:13px}.confirm-icon{width:42px;height:42px;border-radius:13px}
 }
+/* Keep-connected authentication control */
+.keep-connected{display:inline-flex;align-items:center;gap:8px;min-height:36px;color:#596579;font-size:12px;font-weight:650;cursor:pointer;user-select:none}
+.keep-connected input{width:16px!important;height:16px;margin:0!important;accent-color:var(--greenDark);cursor:pointer}
+.keep-connected span{line-height:1.25}
+@media(max-width:420px){.auth-links{align-items:center;gap:10px}.keep-connected{font-size:11px}.auth-links .link-button{white-space:nowrap}}

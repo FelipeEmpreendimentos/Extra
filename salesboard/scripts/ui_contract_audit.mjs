@@ -36,6 +36,10 @@ for (const id of ['login-form', 'register-form', 'forgot-form', 'recovery-form',
 }
 if (!appHtml.includes('id=\"archived-items\"')) failures.push('static: gerenciador de itens arquivados ausente');
 if (!appHtml.includes('id=\"resend-confirmation\"')) failures.push('static: ação de reenviar confirmação ausente');
+if (!appHtml.includes('id=\"keep-connected\"')) failures.push('static: opção Manter conectado ausente');
+for (const marker of ['authSessionStorage', 'setRememberPreference', 'KEEP_CONNECTED_KEY', 'SESSION_ONLY_KEY']) {
+  if (!appSource.includes(marker)) failures.push(`static: persistência de sessão ausente: ${marker}`);
+}
 
 const browser = await chromium.launch({ headless: true });
 for (const viewport of viewports) {
@@ -200,4 +204,4 @@ if (failures.length) {
   console.error(failures.join('\n'));
   process.exit(1);
 }
-console.log('PASS UI contract: alignment + billing/sidebar + confirmations + auth validation + archive/reactivate + historical editing');
+console.log('PASS UI contract: alignment + billing/sidebar + confirmations + auth validation + keep-connected + archive/reactivate + historical editing');

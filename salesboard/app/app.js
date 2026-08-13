@@ -13,6 +13,9 @@
   let supabaseClient = null;
   let publicConfig = null;
   let session = null;
+  const KEEP_CONNECTED_KEY = 'salesboard_keep_connected';
+  const SESSION_ONLY_KEY = 'salesboard_session_only';
+  let rememberSession = false;
   let currentView = 'dashboard';
   let transactionFilter = 'all';
   let categoryType = 'expense';
@@ -192,6 +195,81 @@
     url.hash = '';
     return url.href;
   }
+
+  function persistentAuthStorage() {
+    try { return window.localStorage; } catch { return null; }
+  }
+
+  function transientAuthStorage() {
+    try { return window.sessionStorage; } catch { return null; }
+  }
+
+  function initializeRememberPreference() {
+    const persistent = persistentAuthStorage();
+    const transient = transientAuthStorage();
+    try {
+      if (transient?.getItem(SESSION_ONLY_KEY) === '1') {
+        rememberSession = false;
+        return;
+      }
+      if (persistent?.getItem(KEEP_CONNECTED_KEY) === '1') {
+        rememberSession = true;
+        return;
+      }
+      // Preserve sessions created before the Keep Connected option existed.
+      const legacyPersistentSession = persistent
+        ? Object.keys(persistent).some((key) => key.startsWith('sb-') && key.endsWith('-auth-token') && Boolean(persistent.getItem(key)))
+        : false;
+      rememberSession = legacyPersistentSession;
+      if (legacyPersistentSession) persistent?.setItem(KEEP_CONNECTED_KEY, '1');
+    } catch {
+      rememberSession = false;
+    }
+  }
+
+  function setRememberPreference(enabled) {
+    rememberSession = Boolean(enabled);
+    const persistent = persistentAuthStorage();
+    const transient = transientAuthStorage();
+    try {
+      if (rememberSession) {
+        persistent?.setItem(KEEP_CONNECTED_KEY, '1');
+        transient?.removeItem(SESSION_ONLY_KEY);
+      } else {
+        persistent?.removeItem(KEEP_CONNECTED_KEY);
+        transient?.setItem(SESSION_ONLY_KEY, '1');
+      }
+    } catch {}
+  }
+
+  function clearRememberPreference() {
+    const persistent = persistentAuthStorage();
+    const transient = transientAuthStorage();
+    try {
+      persistent?.removeItem(KEEP_CONNECTED_KEY);
+      transient?.removeItem(SESSION_ONLY_KEY);
+    } catch {}
+    rememberSession = false;
+  }
+
+  const authSessionStorage = {
+    getItem(key) {
+      const storage = rememberSession ? persistentAuthStorage() : transientAuthStorage();
+      try { return storage?.getItem(key) ?? null; } catch { return null; }
+    },
+    setItem(key, value) {
+      const target = rememberSession ? persistentAuthStorage() : transientAuthStorage();
+      const alternate = rememberSession ? transientAuthStorage() : persistentAuthStorage();
+      try {
+        target?.setItem(key, value);
+        alternate?.removeItem(key);
+      } catch {}
+    },
+    removeItem(key) {
+      try { persistentAuthStorage()?.removeItem(key); } catch {}
+      try { transientAuthStorage()?.removeItem(key); } catch {}
+    }
+  };
 
   function authErrorMessage(error) {
     const code = String(error?.code || '').toLowerCase();
@@ -377,6 +455,7 @@
   }
 
   async function initialize() {
+    initializeRememberPreference();
     initStaticEvents();
     if (demoMode) {
       initDemo();
@@ -391,7 +470,7 @@
     }
 
     supabaseClient = window.supabase.createClient(publicConfig.supabaseUrl, publicConfig.supabasePublishableKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storage: authSessionStorage }
     });
 
     supabaseClient.auth.onAuthStateChange((event, nextSession) => {
@@ -1606,6 +1685,7 @@
       return;
     }
     await supabaseClient.auth.signOut();
+    clearRememberPreference();
     location.href = './?mode=login';
   }
 
@@ -1634,6 +1714,7 @@
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Falha na exclusão.');
       await supabaseClient.auth.signOut({ scope: 'local' });
+      clearRememberPreference();
       location.href = '../?account=deleted';
     } catch (error) {
       toast('Não foi possível excluir a conta', friendlyError(error), 'error');
@@ -1688,6 +1769,7 @@
   async function signInWithGoogle() {
     const button = $('#google-auth-button');
     if (!supabaseClient) return;
+    setRememberPreference(Boolean($('#keep-connected')?.checked));
     setButtonLoading(button, true, 'Verificando Google...');
     setAuthMessage('');
     try {
@@ -1723,6 +1805,8 @@
       form.noValidate = true;
       form.setAttribute('novalidate', 'novalidate');
     });
+    const keepConnected = $('#keep-connected');
+    if (keepConnected) keepConnected.checked = rememberSession;
     $('#google-auth-button')?.addEventListener('click', signInWithGoogle);
     $$('[data-auth-mode]').forEach((button) => button.addEventListener('click', () => setAuthMode(button.dataset.authMode)));
     $$('[data-toggle-password]').forEach((button) => button.addEventListener('click', () => {
@@ -1738,6 +1822,7 @@
       setResendConfirmation('');
       if (!isValidEmail(email)) { setAuthMessage('Informe um e-mail válido para entrar.', true); focusField('#login-email'); return; }
       if (!password) { setAuthMessage('Informe sua senha para entrar.', true); focusField('#login-password'); return; }
+      setRememberPreference(Boolean($('#keep-connected')?.checked));
       setButtonLoading(button, true, 'Entrando...');
       try {
         const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
@@ -1855,6 +1940,7 @@
         const { error } = await supabaseClient.auth.updateUser({ password });
         if (error) throw error;
         await supabaseClient.auth.signOut();
+        clearRememberPreference();
         session = null;
         history.replaceState({}, '', appBaseUrl());
         showAuth('login');
