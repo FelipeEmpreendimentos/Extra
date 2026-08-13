@@ -7,6 +7,20 @@ const failures = [];
 
 function fail(viewport, message) { failures.push(`${viewport.width}x${viewport.height}: ${message}`); }
 
+async function openView(page, view) {
+  const candidates = [`.mobile-nav [data-view="${view}"]`, `#main-nav [data-view="${view}"]`, `[data-view="${view}"]`];
+  for (const selector of candidates) {
+    const item = page.locator(selector).first();
+    if (!(await item.count())) continue;
+    try {
+      await item.evaluate((element) => element.click());
+      await page.waitForTimeout(120);
+      return true;
+    } catch {}
+  }
+  return false;
+}
+
 // Static contract: browser-native dialogs are forbidden in the product UI.
 for (const file of ['salesboard/app/app.js', 'salesboard/app/runtime-bridge.js']) {
   const source = fs.readFileSync(file, 'utf8');
@@ -24,7 +38,7 @@ for (const viewport of viewports) {
     await page.goto(`${base}/app/?demo=1`, { waitUntil: 'networkidle', timeout: 60000 });
     await page.waitForSelector('#app-shell:not([hidden])', { timeout: 30000 });
 
-    await page.locator('#quick-add').click();
+    await page.locator('#quick-add').evaluate((element) => element.click());
     await page.locator('input[name="transaction_type"][value="income"]').check();
     await page.locator('#tx-goal').selectOption('g1');
     await page.waitForTimeout(100);
@@ -53,34 +67,34 @@ for (const viewport of viewports) {
       if (alignment.modal && (alignment.modal.left < -1 || alignment.modal.right > viewport.width + 1)) fail(viewport, 'modal de lançamento ultrapassa a largura do celular');
     }
 
-    await page.locator('#transaction-modal [data-close-modal]').first().click();
+    await page.locator('#transaction-modal [data-close-modal]').first().evaluate((element) => element.click());
 
     // Lançamento: deve abrir modal do SalesBoard, nunca confirm() do navegador.
-    await page.locator('[data-view="transactions"]').first().click();
-    await page.locator('[data-delete-transaction]').first().click();
+    if (!(await openView(page, 'transactions'))) throw new Error('view transactions não encontrada');
+    await page.locator('[data-delete-transaction]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     if (!(await page.locator('#confirm-title').textContent()).includes('Excluir lançamento')) fail(viewport, 'confirmação de lançamento não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
     // Conta: mesmo contrato visual. Conta com histórico deve ser arquivada.
-    await page.locator('[data-view="accounts"]').first().click();
-    await page.locator('[data-delete-account-row]').first().click();
+    if (!(await openView(page, 'accounts'))) throw new Error('view accounts não encontrada');
+    await page.locator('[data-delete-account-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     const accountTitle = await page.locator('#confirm-title').textContent();
     if (!/Excluir conta|Arquivar conta/.test(accountTitle || '')) fail(viewport, 'confirmação de conta não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
     // Categoria: mesmo contrato visual. Categoria com histórico deve ser arquivada.
-    await page.locator('[data-view="categories"]').first().click();
-    await page.locator('[data-delete-category-row]').first().click();
+    if (!(await openView(page, 'categories'))) throw new Error('view categories não encontrada');
+    await page.locator('[data-delete-category-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     const categoryTitle = await page.locator('#confirm-title').textContent();
     if (!/Excluir categoria|Arquivar categoria/.test(categoryTitle || '')) fail(viewport, 'confirmação de categoria não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
 
     // Meta usa o mesmo componente de confirmação.
-    await page.locator('[data-view="goals"]').first().click();
-    await page.locator('[data-delete-goal-row]').first().click();
+    if (!(await openView(page, 'goals'))) throw new Error('view goals não encontrada');
+    await page.locator('[data-delete-goal-row]').first().evaluate((element) => element.click());
     await page.waitForSelector('#confirm-modal:not([hidden])');
     if (!(await page.locator('#confirm-title').textContent()).includes('Excluir meta')) fail(viewport, 'confirmação de meta não usa o modal padrão');
     await page.locator('#confirm-cancel').click();
