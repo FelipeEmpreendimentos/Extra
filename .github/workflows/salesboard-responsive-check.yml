@@ -60,6 +60,11 @@ jobs:
           grep -Fq 'id="keep-connected"' salesboard/app/index.html
           grep -Fq 'authSessionStorage' salesboard/app/app.js
           grep -Fq 'setRememberPreference' salesboard/app/app.js
+          grep -Fq 'OAUTH_REMEMBER_KEY' salesboard/app/app.js
+          grep -Fq 'prepareGoogleOAuthStorage' salesboard/app/app.js
+          grep -Fq 'finalizeGoogleOAuthStorage' salesboard/app/app.js
+          grep -Fq 'migrateAuthTokens' salesboard/app/app.js
+          grep -Fq 'Mobile trial-plan alignment' salesboard/app/quality.css
           grep -Fq 'aria-live="polite"' salesboard/app/index.html
           for form in login-form register-form forgot-form recovery-form onboarding-form profile-form transaction-form entity-form confirm-form; do grep -Pq "<form id=\"$form\"[^>]*novalidate" salesboard/app/index.html || { echo "$form uses browser-native validation"; exit 1; }; done
           if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then echo 'Native browser dialog found'; exit 1; fi
