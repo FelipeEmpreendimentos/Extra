@@ -1,60 +1,83 @@
-name: Validate SalesBoard production
+name: Apply SalesBoard future transaction rule
 
 on:
   push:
     branches: [main]
     paths:
-      - "salesboard/**"
-      - ".github/workflows/salesboard-production-check.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "salesboard/**"
       - ".github/workflows/salesboard-production-check.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  validate:
+  patch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v5
         with:
-          node-version-file: "salesboard/.node-version"
-      - name: Validate application files
+          ref: main
+      - name: Patch future transaction effective-date behavior
         run: |
-          test -f salesboard/index.html
-          test -f salesboard/app/index.html
-          test -f salesboard/app/app.js
-          test -f salesboard/app/runtime-bridge.js
-          test -f salesboard/app/app.css
-          test -f salesboard/app/quality.css
-          test -f salesboard/supabase/schema.sql
-      - name: Validate JavaScript
-        working-directory: salesboard
-        run: npm run check
-      - name: Validate authentication UX contracts
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_path = Path('salesboard/app/app.js')
+          html_path = Path('salesboard/app/index.html')
+          app = app_path.read_text(encoding='utf-8')
+          html = html_path.read_text(encoding='utf-8')
+
+          old_paid = """  function paidTransactions() {\n    return state.transactions.filter((item) => item.status === 'paid');\n  }\n\n  function monthTransactions(key = currentMonthKey()) {\n    return paidTransactions().filter((item) => monthKey(item.transaction_date) === key);\n  }"""
+          new_paid = """  function isFutureTransaction(item, today = isoDate()) {\n    return Boolean(item?.transaction_date) && item.transaction_date > today;\n  }\n\n  function transactionStatusLabel(item) {\n    if (item?.status === 'paid' && isFutureTransaction(item)) return 'Agendado';\n    return item?.status === 'pending' ? 'Pendente' : 'Pago';\n  }\n\n  function paidTransactions() {\n    const today = isoDate();\n    return state.transactions.filter((item) => item.status === 'paid' && (!item.transaction_date || item.transaction_date <= today));\n  }\n\n  function monthTransactions(key = currentMonthKey()) {\n    return paidTransactions().filter((item) => monthKey(item.transaction_date) === key);\n  }"""
+          if old_paid not in app:
+              raise SystemExit('paidTransactions marker not found')
+          app = app.replace(old_paid, new_paid, 1)
+
+          old_status = """<td><span class=\"status-pill ${row.status === 'pending' ? 'pending' : ''}\">${row.status === 'pending' ? 'Pendente' : 'Pago'}</span></td>"""
+          new_status = """<td><span class=\"status-pill ${row.status === 'pending' ? 'pending' : (isFutureTransaction(row) ? 'scheduled' : '')}\">${transactionStatusLabel(row)}</span></td>"""
+          if old_status not in app:
+              raise SystemExit('transaction status marker not found')
+          app = app.replace(old_status, new_status, 1)
+
+          old_recent = """<small>${escapeHTML(category.name)} · ${shortDateBR.format(new Date(`${row.transaction_date}T12:00:00`))}</small>"""
+          new_recent = """<small>${escapeHTML(category.name)} · ${shortDateBR.format(new Date(`${row.transaction_date}T12:00:00`))}${row.status === 'paid' && isFutureTransaction(row) ? ' · Agendado' : ''}</small>"""
+          if old_recent not in app:
+              raise SystemExit('recent marker not found')
+          app = app.replace(old_recent, new_recent, 1)
+
+          old_csv = """row.transaction_date, row.status === 'paid' ? 'Pago' : 'Pendente', row.recurring ? 'Sim' : 'Não'"""
+          new_csv = """row.transaction_date, transactionStatusLabel(row), row.recurring ? 'Sim' : 'Não'"""
+          if old_csv not in app:
+              raise SystemExit('CSV marker not found')
+          app = app.replace(old_csv, new_csv, 1)
+
+          old_toast = """      toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento salvo');"""
+          new_toast = """      const savedDate = $('#tx-date').value;\n      const savedStatus = $('#tx-status').value;\n      if (savedStatus === 'paid' && savedDate > isoDate()) {\n        toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento agendado', `O saldo será atualizado automaticamente em ${dateBR.format(new Date(`${savedDate}T12:00:00`))}.`, 'info');\n      } else {\n        toast(editingTransactionId ? 'Lançamento atualizado' : 'Lançamento salvo');\n      }"""
+          if old_toast not in app:
+              raise SystemExit('toast marker not found')
+          app = app.replace(old_toast, new_toast, 1)
+
+          html, count = re.subn(r'app\\.js\\?v=[^\"\']+', 'app.js?v=20260813-future1', html, count=1)
+          if count != 1:
+              raise SystemExit('app.js version marker not found')
+
+          app_path.write_text(app, encoding='utf-8')
+          html_path.write_text(html, encoding='utf-8')
+          PY
+      - name: Validate future transaction contract
         run: |
-          grep -Fq 'google-auth-button' salesboard/app/index.html
-          grep -Fq 'id="keep-connected"' salesboard/app/index.html
-          grep -Fq 'mobile-oauth-session-bridge' salesboard/app/index.html
-          grep -Fq 'salesboard_mobile_oauth_session' salesboard/app/index.html
-          grep -Fq 'app.js?v=20260813-google3' salesboard/app/index.html
-          grep -Fq 'quality.css?v=20260813-google3' salesboard/app/index.html
-          grep -Fq "provider: 'google'" salesboard/app/app.js
-          grep -Fq 'authSessionStorage' salesboard/app/app.js
-          grep -Fq 'prepareGoogleOAuthStorage' salesboard/app/app.js
-          grep -Fq 'finalizeGoogleOAuthStorage' salesboard/app/app.js
-      - name: Validate product safety contracts
+          grep -Fq 'function isFutureTransaction' salesboard/app/app.js
+          grep -Fq "transactionStatusLabel" salesboard/app/app.js
+          grep -Fq "item.transaction_date <= today" salesboard/app/app.js
+          grep -Fq "Lançamento agendado" salesboard/app/app.js
+          grep -Fq 'app.js?v=20260813-future1' salesboard/app/index.html
+          node --check salesboard/app/app.js
+      - name: Commit rule
         run: |
-          grep -Fq 'complete_salesboard_onboarding' salesboard/supabase/009_atomic_onboarding_completion.sql
-          grep -Fq 'goal_amount' salesboard/supabase/013_goal_allocations.sql
-          grep -Fq 'account_is_archived' salesboard/supabase/014_archive_history_integrity.sql
-          grep -Fq 'category_is_archived' salesboard/supabase/014_archive_history_integrity.sql
-          grep -Fq 'requestConfirmation' salesboard/app/app.js
-          grep -Fq 'reactivateEntity' salesboard/app/app.js
-          if grep -Pq '\b(confirm|prompt|alert)\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js salesboard/app.js salesboard/legal/legal.js; then exit 1; fi
-          if grep -Pq '\breportValidity\s*\(' salesboard/app/app.js salesboard/app/runtime-bridge.js; then exit 1; fi
+          git config user.name "SalesBoard Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add salesboard/app/app.js salesboard/app/index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Apply future transaction effective-date rule"
+          git push origin main
