@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="app.css" />
-  <link rel="stylesheet" href="quality.css" />
+  <link rel="stylesheet" href="app.css?v=20260813-google3" />
+  <link rel="stylesheet" href="quality.css?v=20260813-google3" />
 </head>
 <body>
   <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
@@ -176,9 +176,65 @@
     </div>
   </div>
 
+  <script id="mobile-oauth-session-bridge">
+(() => {
+  const KEEP = 'salesboard_keep_connected';
+  const SESSION_ONLY = 'salesboard_session_only';
+  const OAUTH = 'salesboard_oauth_remember';
+  const TEMP = 'salesboard_mobile_oauth_session';
+  let persistent = null;
+  let transient = null;
+  try { persistent = window.localStorage; } catch {}
+  try { transient = window.sessionStorage; } catch {}
+  if (!persistent || !transient) return;
+
+  const params = new URLSearchParams(location.search);
+  const authKeys = () => {
+    try { return Object.keys(persistent).filter((key) => key.startsWith('sb-') && key.endsWith('-auth-token')); }
+    catch { return []; }
+  };
+
+  // If this was a non-persistent Google session and the browser was
+  // reopened, remove the durable token before the SalesBoard app starts.
+  if (persistent.getItem(TEMP) === '1' && transient.getItem(TEMP) !== '1' && params.get('oauth') !== 'google') {
+    persistent.removeItem(KEEP);
+    persistent.removeItem(OAUTH);
+    persistent.removeItem(TEMP);
+    for (const key of authKeys()) persistent.removeItem(key);
+  }
+
+  // On the Google callback, keep the token durable for the whole current
+  // browser session. This avoids losing it mid-onboarding on Android
+  // custom tabs. The next browser session will clear it when the user did
+  // not choose "Manter conectado".
+  if (params.get('oauth') === 'google' && persistent.getItem(OAUTH) === '0') {
+    persistent.setItem(OAUTH, '1');
+    persistent.setItem(KEEP, '1');
+    persistent.setItem(TEMP, '1');
+    transient.setItem(TEMP, '1');
+    transient.removeItem(SESSION_ONLY);
+  }
+
+  document.addEventListener('change', (event) => {
+    if (event.target?.id === 'keep-connected' && event.target.checked) {
+      persistent.removeItem(TEMP);
+      transient.removeItem(TEMP);
+    }
+  }, true);
+
+  document.addEventListener('click', (event) => {
+    const id = event.target?.closest?.('button')?.id;
+    if (['logout-button', 'paywall-logout', 'trial-plan-logout'].includes(id)) {
+      persistent.removeItem(TEMP);
+      transient.removeItem(TEMP);
+    }
+  }, true);
+})();
+</script>
+
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4" defer></script>
-  <script src="runtime-bridge.js"></script>
-  <script src="app.js" defer></script>
+  <script src="runtime-bridge.js?v=20260813-google3"></script>
+  <script src="app.js?v=20260813-google3" defer></script>
 </body>
 </html>
